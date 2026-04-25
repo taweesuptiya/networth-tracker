@@ -10,6 +10,8 @@ export type CommitTx = {
   currency: string;
   direction: "credit" | "debit";
   category?: string | null;
+  tx_type?: "income" | "expense" | "transfer" | "cc_payment" | "cc_payment_received" | "reimbursement";
+  account_id?: string | null;
 };
 
 export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
@@ -22,6 +24,8 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
     currency: t.currency,
     direction: t.direction,
     category: t.category ?? null,
+    tx_type: t.tx_type ?? "auto",
+    account_id: t.account_id ?? null,
   }));
   const { error, data } = await supabase.from("transactions").insert(rows).select("id");
   if (error) return { error: error.message, count: 0 };

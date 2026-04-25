@@ -43,24 +43,28 @@ export default async function ProjectionPage({
     total_networth_budget: Number(b.total_networth_budget),
   }));
 
-  // Aggregate transactions by month for actuals overlay
+  // Aggregate transactions by month for actuals overlay (excludes transfers/cc_payments,
+  // nets reimbursements against expenses).
   const { data: txs } = await supabase
     .from("transactions")
-    .select("occurred_at, amount, currency, direction")
+    .select("occurred_at, amount, direction, tx_type, category")
     .eq("workspace_id", active.id);
 
-  const actualsMap = new Map<string, { income: number; expense: number }>();
-  for (const t of txs ?? []) {
-    const month = String(t.occurred_at).slice(0, 7); // YYYY-MM
-    const cur = actualsMap.get(month) ?? { income: 0, expense: 0 };
-    const amt = Number(t.amount);
-    if (t.direction === "credit") cur.income += amt;
-    else cur.expense += amt;
-    actualsMap.set(month, cur);
-  }
-  const actuals = Array.from(actualsMap.entries())
-    .map(([month, v]) => ({ month, ...v }))
-    .sort((a, b) => a.month.localeCompare(b.month));
+  const { aggregateMonthly } = await import("@/lib/tx-rules");
+  const monthly = aggregateMonthly(
+    (txs ?? []).map((t) => ({
+      occurred_at: String(t.occurred_at),
+      amount: Number(t.amount),
+      direction: t.direction as "credit" | "debit",
+      tx_type: String(t.tx_type),
+      category: t.category as string | null,
+    }))
+  );
+  const actuals = monthly.map((m) => ({
+    month: m.month,
+    income: m.income,
+    expense: m.expense,
+  }));
 
   // Starting net worth = current asset total in base currency
   const { data: assetsData } = await supabase

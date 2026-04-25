@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { StatementUploader } from "@/components/statement-uploader-dynamic";
 import { PdfPasswordsManager } from "@/components/pdf-passwords-manager";
 import { AppShell } from "@/components/app-shell";
+import type { Rule } from "@/lib/tx-rules";
 
 export default async function StatementsPage() {
   const supabase = await createClient();
@@ -21,6 +22,17 @@ export default async function StatementsPage() {
     .select("id, label, password")
     .order("created_at");
 
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, name, type")
+    .order("name");
+
+  const { data: ruleRows } = await supabase
+    .from("tx_rules")
+    .select("*")
+    .order("priority");
+  const rules: Rule[] = (ruleRows ?? []) as Rule[];
+
   const { data: recentTx } = await supabase
     .from("transactions")
     .select("id, occurred_at, description, amount, currency, direction, category, workspace_id")
@@ -37,7 +49,12 @@ export default async function StatementsPage() {
 
       <main className="flex-1 px-6 py-8 max-w-5xl w-full mx-auto">
         <PdfPasswordsManager initial={pdfPasswords ?? []} />
-        <StatementUploader workspaces={workspaces ?? []} savedPasswords={pdfPasswords ?? []} />
+        <StatementUploader
+          workspaces={workspaces ?? []}
+          savedPasswords={pdfPasswords ?? []}
+          accounts={accounts ?? []}
+          rules={rules}
+        />
 
         <div className="mt-10">
           <h2 className="text-sm font-medium text-zinc-500 mb-3">Recent transactions</h2>

@@ -7,6 +7,7 @@ const items = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/projection", label: "Projection", icon: "📈" },
   { href: "/statements", label: "Upload transactions", icon: "📤" },
+  { href: "/accounts", label: "Accounts & rules", icon: "🏦" },
 ];
 
 export function Sidebar({ userEmail }: { userEmail: string | null }) {
