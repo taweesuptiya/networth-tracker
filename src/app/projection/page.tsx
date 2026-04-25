@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { loadProjectionConfig } from "@/app/actions/projection";
 import { ProjectionPageClient } from "@/components/projection-page-client";
+import type { SavedBudget } from "@/components/projection-table";
 import { valueInBase } from "@/lib/money";
 
 export default async function ProjectionPage({
@@ -28,6 +29,19 @@ export default async function ProjectionPage({
   const active = workspaces.find((w) => w.id === activeId) ?? workspaces[0];
 
   const config = await loadProjectionConfig(active.id);
+
+  const { data: budgetRows } = await supabase
+    .from("monthly_budgets")
+    .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget")
+    .eq("workspace_id", active.id)
+    .order("month");
+  const savedBudgets: SavedBudget[] = (budgetRows ?? []).map((b) => ({
+    month: String(b.month).slice(0, 7),
+    income_budget: Number(b.income_budget),
+    expense_budget: Number(b.expense_budget),
+    net_save_budget: Number(b.net_save_budget),
+    total_networth_budget: Number(b.total_networth_budget),
+  }));
 
   // Aggregate transactions by month for actuals overlay
   const { data: txs } = await supabase
@@ -86,6 +100,7 @@ export default async function ProjectionPage({
           workspaceId={active.id}
           initialConfig={config}
           actuals={actuals}
+          savedBudgets={savedBudgets}
           startingNetworth={startingNetworth}
         />
       </main>

@@ -6,30 +6,36 @@ import type { MonthRow } from "@/lib/projection";
 const fmt = (n: number) =>
   Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-type ActualMonth = {
-  month: string;
-  income: number;
-  expense: number;
+type ActualMonth = { month: string; income: number; expense: number };
+export type SavedBudget = {
+  month: string; // YYYY-MM
+  income_budget: number;
+  expense_budget: number;
+  net_save_budget: number;
+  total_networth_budget: number;
 };
 
 export function ProjectionTable({
   rows,
   actuals,
+  savedBudgets,
 }: {
   rows: MonthRow[];
   actuals: ActualMonth[];
+  savedBudgets: SavedBudget[];
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? rows : rows.slice(0, 12);
 
-  function actualFor(month: string) {
-    return actuals.find((a) => a.month === month);
-  }
+  const actualMap = new Map(actuals.map((a) => [a.month, a]));
+  const budgetMap = new Map(savedBudgets.map((b) => [b.month, b]));
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-6">
       <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-sm font-medium text-zinc-500">Monthly projection vs actuals</h2>
+        <h2 className="text-sm font-medium text-zinc-500">
+          Forecast vs Budget vs Actual
+        </h2>
         <button
           onClick={() => setShowAll((v) => !v)}
           className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -41,7 +47,9 @@ export function ProjectionTable({
         <table className="w-full text-xs">
           <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500">
             <tr>
-              <th className="px-3 py-2 sticky left-0 bg-zinc-50 dark:bg-zinc-900 z-10">Line</th>
+              <th className="px-3 py-2 sticky left-0 bg-zinc-50 dark:bg-zinc-900 z-10">
+                Line
+              </th>
               {visible.map((r) => (
                 <th key={r.month} className="px-3 py-2 text-right whitespace-nowrap">
                   {r.month}
@@ -51,18 +59,50 @@ export function ProjectionTable({
           </thead>
           <tbody>
             <Section label="INCOME" />
+            <Row label="Forecast" values={visible.map((r) => r.total_income)} bold />
             <Row
-              label="Salary"
-              values={visible.map((r) => r.salary)}
-            />
-            <Row label="RSU" values={visible.map((r) => r.rsu)} />
-            <Row label="Bonus stock" values={visible.map((r) => r.bonus_stock)} />
-            <Row label="Bonus cash" values={visible.map((r) => r.bonus_cash)} />
-            <Row label="Total income" values={visible.map((r) => r.total_income)} bold />
-            <Row
-              label="↳ Actual income"
-              values={visible.map((r) => actualFor(r.month)?.income ?? 0)}
+              label="↳ Budget"
+              values={visible.map((r) => budgetMap.get(r.month)?.income_budget ?? 0)}
               muted
+            />
+            <Row
+              label="↳ Actual"
+              values={visible.map((r) => actualMap.get(r.month)?.income ?? 0)}
+              muted
+            />
+            <Row
+              label="↳ Variance (Actual − Budget)"
+              values={visible.map((r) => {
+                const b = budgetMap.get(r.month)?.income_budget ?? 0;
+                const a = actualMap.get(r.month)?.income ?? 0;
+                return b === 0 || a === 0 ? 0 : a - b;
+              })}
+              muted
+              variance
+              positiveIsGood
+            />
+
+            <Section label="EXPENSES" />
+            <Row label="Forecast" values={visible.map((r) => r.expenses)} bold />
+            <Row
+              label="↳ Budget"
+              values={visible.map((r) => budgetMap.get(r.month)?.expense_budget ?? 0)}
+              muted
+            />
+            <Row
+              label="↳ Actual"
+              values={visible.map((r) => actualMap.get(r.month)?.expense ?? 0)}
+              muted
+            />
+            <Row
+              label="↳ Variance (Actual − Budget)"
+              values={visible.map((r) => {
+                const b = budgetMap.get(r.month)?.expense_budget ?? 0;
+                const a = actualMap.get(r.month)?.expense ?? 0;
+                return b === 0 || a === 0 ? 0 : a - b;
+              })}
+              muted
+              variance
             />
 
             <Section label="DEDUCTIONS" />
@@ -70,43 +110,47 @@ export function ProjectionTable({
             <Row label="Provident" values={visible.map((r) => r.provident)} />
             <Row label="Employer match" values={visible.map((r) => r.employer)} />
             <Row label="Tax" values={visible.map((r) => r.tax)} />
-            <Row label="RMF+ESG" values={visible.map((r) => r.rmf_esg)} />
             <Row label="Net pay" values={visible.map((r) => r.net_pay)} bold />
 
-            <Section label="EXPENSES" />
-            <Row label="Fixed expenses" values={visible.map((r) => r.expenses)} />
+            <Section label="SAVINGS" />
+            <Row label="Net cash save (forecast)" values={visible.map((r) => r.net_cash_save)} bold />
             <Row
-              label="↳ Actual expenses"
-              values={visible.map((r) => actualFor(r.month)?.expense ?? 0)}
+              label="↳ Budget"
+              values={visible.map((r) => budgetMap.get(r.month)?.net_save_budget ?? 0)}
               muted
             />
             <Row
-              label="↳ Variance"
+              label="↳ Actual (Income − Expense)"
               values={visible.map((r) => {
-                const a = actualFor(r.month);
-                if (!a) return 0;
-                return a.expense - r.expenses;
+                const a = actualMap.get(r.month);
+                return a ? a.income - a.expense : 0;
               })}
               muted
-              variance
+            />
+            <Row label="Net stock save" values={visible.map((r) => r.net_stock_save)} />
+            <Row
+              label="Saving rate %"
+              values={visible.map((r) => r.saving_rate * 100)}
+              percent
             />
 
-            <Section label="SAVINGS" />
-            <Row label="Net cash save" values={visible.map((r) => r.net_cash_save)} bold />
-            <Row label="Net stock save" values={visible.map((r) => r.net_stock_save)} />
-            <Row label="Saving rate %" values={visible.map((r) => r.saving_rate * 100)} percent />
-
-            <Section label="ASSET BALANCES (end of month)" />
+            <Section label="ASSET BALANCES (forecast end of month)" />
             <Row label="Saving" values={visible.map((r) => r.saving_balance)} />
             <Row label="Stock" values={visible.map((r) => r.stock_balance)} />
             <Row label="PVD" values={visible.map((r) => r.pvd_balance)} />
             <Row label="SSF+RMF" values={visible.map((r) => r.ssf_rmf_balance)} />
-            <Row label="Marriage" values={visible.map((r) => r.marriage_balance)} />
             <Row
-              label="TOTAL NETWORTH"
+              label="TOTAL NETWORTH (forecast)"
               values={visible.map((r) => r.total_networth)}
               bold
               highlight
+            />
+            <Row
+              label="↳ Budget snapshot"
+              values={visible.map(
+                (r) => budgetMap.get(r.month)?.total_networth_budget ?? 0
+              )}
+              muted
             />
           </tbody>
         </table>
@@ -118,7 +162,10 @@ export function ProjectionTable({
 function Section({ label }: { label: string }) {
   return (
     <tr className="bg-zinc-100 dark:bg-zinc-800/50">
-      <td colSpan={1000} className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0">
+      <td
+        colSpan={1000}
+        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0"
+      >
         {label}
       </td>
     </tr>
@@ -133,6 +180,7 @@ function Row({
   highlight,
   percent,
   variance,
+  positiveIsGood,
 }: {
   label: string;
   values: number[];
@@ -141,6 +189,7 @@ function Row({
   highlight?: boolean;
   percent?: boolean;
   variance?: boolean;
+  positiveIsGood?: boolean;
 }) {
   return (
     <tr
@@ -151,13 +200,22 @@ function Row({
         (bold ? "font-medium " : "")
       }
     >
-      <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap">{label}</td>
+      <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap">
+        {label}
+      </td>
       {values.map((v, i) => {
         let cls = "px-3 py-1.5 text-right whitespace-nowrap ";
-        if (variance) cls += v > 0 ? "text-red-500 " : v < 0 ? "text-green-600 " : "";
+        if (variance) {
+          if (v > 0) cls += positiveIsGood ? "text-green-600 " : "text-red-500 ";
+          else if (v < 0) cls += positiveIsGood ? "text-red-500 " : "text-green-600 ";
+        }
         return (
           <td key={i} className={cls}>
-            {percent ? `${v.toFixed(1)}%` : v === 0 ? "—" : (variance && v > 0 ? "+" : "") + fmt(v)}
+            {percent
+              ? `${v.toFixed(1)}%`
+              : v === 0
+                ? "—"
+                : (variance && v > 0 ? "+" : "") + fmt(v)}
           </td>
         );
       })}
