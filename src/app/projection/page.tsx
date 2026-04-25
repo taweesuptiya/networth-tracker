@@ -66,6 +66,8 @@ export default async function ProjectionPage({
     income: m.income,
     expense: m.expense,
     expense_by_category: Object.fromEntries(m.expense_by_category),
+    gross_expense_by_category: Object.fromEntries(m.gross_expense_by_category),
+    reimbursement_by_category: Object.fromEntries(m.reimbursement_by_category),
   }));
 
   // Starting net worth = current asset total in base currency

@@ -12,6 +12,8 @@ type ActualMonth = {
   income: number;
   expense: number;
   expense_by_category?: Record<string, number>;
+  gross_expense_by_category?: Record<string, number>;
+  reimbursement_by_category?: Record<string, number>;
 };
 export type SavedBudget = {
   month: string; // YYYY-MM
@@ -157,12 +159,21 @@ export function ProjectionTable({
                     budgetMap.get(r.month)?.expense_lines?.find((l) => l.label === cat)?.amount ??
                     0
                 );
-                const actualVals = visible.map(
+                const grossVals = visible.map(
+                  (r) =>
+                    actualMap.get(r.month)?.gross_expense_by_category?.[cat] ??
+                    actualMap.get(r.month)?.expense_by_category?.[cat] ??
+                    0
+                );
+                const reimbVals = visible.map(
+                  (r) => actualMap.get(r.month)?.reimbursement_by_category?.[cat] ?? 0
+                );
+                const netVals = visible.map(
                   (r) => actualMap.get(r.month)?.expense_by_category?.[cat] ?? 0
                 );
                 const varianceVals = forecastVals.map((_, i) => {
                   const b = budgetVals[i];
-                  const a = actualVals[i];
+                  const a = netVals[i];
                   return b === 0 || a === 0 ? 0 : a - b;
                 });
                 return (
@@ -171,9 +182,14 @@ export function ProjectionTable({
                     label={cat}
                     forecast={forecastVals}
                     budget={budgetVals}
-                    actual={actualVals}
+                    gross={grossVals}
+                    reimbursement={reimbVals}
+                    actual={netVals}
                     variance={varianceVals}
                     linkBuilder={(i) => txLink(workspaceId, visible[i].month, { category: cat })}
+                    reimbLinkBuilder={(i) =>
+                      txLink(workspaceId, visible[i].month, { category: cat, tx_type: "reimbursement" })
+                    }
                   />
                 );
               })}
@@ -271,19 +287,25 @@ function CategoryGroup({
   label,
   forecast,
   budget,
+  gross,
+  reimbursement,
   actual,
   variance,
   linkBuilder,
+  reimbLinkBuilder,
 }: {
   label: string;
   forecast: number[];
   budget: number[];
-  actual: number[];
+  gross: number[];
+  reimbursement: number[];
+  actual: number[]; // net = gross - reimbursement
   variance: number[];
   linkBuilder: (i: number) => string;
+  reimbLinkBuilder: (i: number) => string;
 }) {
-  // % of budget used per month (Actual / Budget)
   const pctOfBudget = actual.map((a, i) => (budget[i] > 0 ? (a / budget[i]) * 100 : 0));
+  const hasReimb = reimbursement.some((v) => v > 0);
   return (
     <>
       <tr className="border-t border-zinc-200 dark:border-zinc-800">
@@ -297,7 +319,18 @@ function CategoryGroup({
         ))}
       </tr>
       <Row label="↳ Budget" values={budget} muted />
-      <Row label="↳ Actual" values={actual} muted linkBuilder={linkBuilder} />
+      {hasReimb && (
+        <>
+          <Row label="↳ Gross spend" values={gross} muted linkBuilder={linkBuilder} />
+          <Row
+            label="↳ Reimbursements"
+            values={reimbursement.map((v) => -v)}
+            muted
+            linkBuilder={reimbLinkBuilder}
+          />
+        </>
+      )}
+      <Row label="↳ Net actual" values={actual} muted linkBuilder={linkBuilder} />
       <Row label="↳ % of budget" values={pctOfBudget} muted percent />
       <Row label="↳ Variance" values={variance} muted variance />
     </>

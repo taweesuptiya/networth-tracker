@@ -181,7 +181,9 @@ export const defaultRules: Omit<Rule, "id" | "enabled">[] = [
 export type MonthlyTotals = {
   month: string;
   income: number;
-  expense_by_category: Map<string, number>;
+  expense_by_category: Map<string, number>; // net (gross - reimbursement)
+  gross_expense_by_category: Map<string, number>;
+  reimbursement_by_category: Map<string, number>;
   expense: number; // net of reimbursements
   income_excl_reimb: number;
 };
@@ -204,6 +206,8 @@ export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
         month,
         income: 0,
         expense_by_category: new Map(),
+        gross_expense_by_category: new Map(),
+        reimbursement_by_category: new Map(),
         expense: 0,
         income_excl_reimb: 0,
       };
@@ -211,18 +215,26 @@ export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
     }
     const amt = Number(t.amount);
     const cat = t.category || "Uncategorized";
+    const addNet = (delta: number) =>
+      row!.expense_by_category.set(cat, (row!.expense_by_category.get(cat) ?? 0) + delta);
     switch (t.tx_type) {
       case "income":
         row.income += amt;
         row.income_excl_reimb += amt;
         break;
       case "expense":
-        row.expense_by_category.set(cat, (row.expense_by_category.get(cat) ?? 0) + amt);
+        row.gross_expense_by_category.set(
+          cat,
+          (row.gross_expense_by_category.get(cat) ?? 0) + amt
+        );
+        addNet(amt);
         break;
       case "reimbursement":
-        // Reduce the matching expense category
-        row.expense_by_category.set(cat, (row.expense_by_category.get(cat) ?? 0) - amt);
-        // Don't add to income
+        row.reimbursement_by_category.set(
+          cat,
+          (row.reimbursement_by_category.get(cat) ?? 0) + amt
+        );
+        addNet(-amt);
         break;
       case "transfer":
       case "cc_payment":
@@ -230,12 +242,15 @@ export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
         // Excluded from P&L
         break;
       default:
-        // 'auto' fallback shouldn't appear after classification but be safe
         if (t.direction === "credit") {
           row.income += amt;
           row.income_excl_reimb += amt;
         } else {
-          row.expense_by_category.set(cat, (row.expense_by_category.get(cat) ?? 0) + amt);
+          row.gross_expense_by_category.set(
+            cat,
+            (row.gross_expense_by_category.get(cat) ?? 0) + amt
+          );
+          addNet(amt);
         }
     }
   }

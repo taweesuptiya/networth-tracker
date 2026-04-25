@@ -21,6 +21,8 @@ export function ProjectionPageClient({
     income: number;
     expense: number;
     expense_by_category?: Record<string, number>;
+    gross_expense_by_category?: Record<string, number>;
+    reimbursement_by_category?: Record<string, number>;
   }[];
   savedBudgets: SavedBudget[];
   startingNetworth: number;
