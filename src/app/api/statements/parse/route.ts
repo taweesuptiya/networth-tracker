@@ -11,15 +11,15 @@ const SCHEMA = {
     statement_period: {
       type: "object",
       properties: {
-        start: { type: "string", description: "ISO date YYYY-MM-DD" },
-        end: { type: "string", description: "ISO date YYYY-MM-DD" },
+        start: { type: "string" },
+        end: { type: "string" },
       },
       required: ["start", "end"],
       additionalProperties: false,
     },
     account_holder: { type: "string" },
     account_number_masked: { type: "string" },
-    currency: { type: "string", description: "e.g. THB, USD" },
+    currency: { type: "string" },
     transactions: {
       type: "array",
       items: {
@@ -41,44 +41,6 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function isEncrypted(buffer: Buffer): boolean {
-  // Cheap heuristic: PDF spec encrypted files have "/Encrypt" in the trailer dictionary.
-  // Reading the last 8KB is enough — that's where xref + trailer live.
-  const tail = buffer.subarray(Math.max(0, buffer.length - 8192));
-  return tail.includes(Buffer.from("/Encrypt"));
-}
-
-async function decryptToText(
-  buffer: Buffer,
-  passwords: string[]
-): Promise<{ text: string; passwordUsed: string | null } | { error: string }> {
-  let getDocumentProxy, extractText;
-  try {
-    const unpdf = await import("unpdf");
-    getDocumentProxy = unpdf.getDocumentProxy;
-    extractText = unpdf.extractText;
-  } catch (e) {
-    return { error: `Failed to load PDF library: ${e instanceof Error ? e.message : String(e)}` };
-  }
-
-  const candidates: (string | undefined)[] = [undefined, ...passwords];
-  let lastErr: string | null = null;
-
-  for (const pw of candidates) {
-    try {
-      const data = new Uint8Array(buffer);
-      const pdf = await getDocumentProxy(data, { password: pw });
-      const { text } = await extractText(pdf, { mergePages: true });
-      return { text: text as string, passwordUsed: pw ?? null };
-    } catch (e) {
-      lastErr = e instanceof Error ? e.message : String(e);
-      if (!/password/i.test(lastErr)) return { error: lastErr };
-    }
-  }
-
-  return { error: `Could not decrypt PDF. Last error: ${lastErr}` };
-}
-
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -93,52 +55,31 @@ export async function POST(request: Request) {
     }
 
     const form = await request.formData();
+    const extractedText = form.get("text");
     const file = form.get("file");
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-    }
-    if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "Only PDF files supported" }, { status: 400 });
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const client = new Anthropic({ apiKey });
 
     let messageContent;
-    let decryptInfo = "no-password";
 
-    if (isEncrypted(buffer)) {
-      // Encrypted: load saved passwords, decrypt, send extracted text to Claude
-      const { data: pwRows } = await supabase.from("pdf_passwords").select("password");
-      const passwords = (pwRows ?? []).map((r) => r.password as string);
-      const result = await decryptToText(buffer, passwords);
-      if ("error" in result) {
-        return NextResponse.json(
-          {
-            error:
-              passwords.length === 0
-                ? "PDF is password-protected but you haven't saved any passwords yet. Add one in the 🔐 panel above."
-                : `PDF is password-protected and none of your ${passwords.length} saved passwords worked. ${result.error}`,
-          },
-          { status: 400 }
-        );
-      }
-      decryptInfo = result.passwordUsed ? "saved-password" : "no-password";
+    if (typeof extractedText === "string" && extractedText.length > 0) {
+      // Client decrypted + extracted text already
       messageContent = [
         {
           type: "text" as const,
           text:
             "The following text was extracted from a bank or credit card statement PDF. " +
-            "Extract all transactions as structured JSON. Dates must be ISO YYYY-MM-DD. " +
-            "Amounts are always positive — use the direction field to indicate credit (money in) or debit (money out). " +
-            "If descriptions are in Thai, translate to English where helpful but keep merchant names. " +
-            "Skip running balance entries — only include actual transactions.\n\n" +
+            "Extract all transactions as structured JSON. Dates ISO YYYY-MM-DD. " +
+            "Amounts always positive — use direction (credit=in, debit=out). " +
+            "Translate Thai descriptions to English where helpful but keep merchant names. " +
+            "Skip running balance entries — only actual transactions.\n\n" +
             "=== STATEMENT TEXT ===\n" +
-            result.text,
+            extractedText,
         },
       ];
-    } else {
-      // Unencrypted: send PDF directly to Claude (preserves visual layout)
+    } else if (file instanceof File) {
+      if (file.type !== "application/pdf") {
+        return NextResponse.json({ error: "Only PDF files supported" }, { status: 400 });
+      }
+      const buffer = Buffer.from(await file.arrayBuffer());
       const base64 = buffer.toString("base64");
       messageContent = [
         {
@@ -149,13 +90,16 @@ export async function POST(request: Request) {
           type: "text" as const,
           text:
             "Extract all transactions from this bank or credit card statement. " +
-            "Return as structured JSON. Dates ISO YYYY-MM-DD. Amounts positive; use direction (credit/debit). " +
+            "Return as structured JSON. Dates ISO YYYY-MM-DD. Amounts positive; use direction. " +
             "Translate Thai descriptions to English where helpful but keep merchant names. " +
             "Skip running balance entries.",
         },
       ];
+    } else {
+      return NextResponse.json({ error: "No file or text provided" }, { status: 400 });
     }
 
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 8000,
@@ -185,7 +129,6 @@ export async function POST(request: Request) {
       account_holder: parsed.account_holder ?? null,
       account_number: parsed.account_number_masked ?? null,
       transactions: parsed.transactions,
-      decrypted_with: decryptInfo,
       usage: response.usage,
     });
   } catch (err) {

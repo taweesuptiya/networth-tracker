@@ -40,7 +40,7 @@ export default async function StatementsPage() {
 
       <main className="flex-1 px-6 py-8 max-w-5xl w-full mx-auto">
         <PdfPasswordsManager initial={pdfPasswords ?? []} />
-        <StatementUploader workspaces={workspaces ?? []} />
+        <StatementUploader workspaces={workspaces ?? []} savedPasswords={pdfPasswords ?? []} />
 
         <div className="mt-10">
           <h2 className="text-sm font-medium text-zinc-500 mb-3">Recent transactions</h2>

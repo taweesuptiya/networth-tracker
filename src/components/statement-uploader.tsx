@@ -19,13 +19,68 @@ type ParseResult = {
   account_holder: string | null;
   account_number: string | null;
   transactions: ParsedTx[];
-  usage?: { input_tokens?: number; output_tokens?: number };
 };
+
+type SavedPassword = { id: string; label: string | null; password: string };
+
+async function loadPdfjs() {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+  return pdfjs;
+}
+
+async function pdfHeaderHasEncrypt(buf: ArrayBuffer): Promise<boolean> {
+  const tail = new Uint8Array(buf, Math.max(0, buf.byteLength - 8192));
+  const needle = new TextEncoder().encode("/Encrypt");
+  outer: for (let i = 0; i <= tail.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (tail[i + j] !== needle[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+async function extractText(
+  buf: ArrayBuffer,
+  passwords: string[]
+): Promise<{ text: string } | { error: string }> {
+  const pdfjs = await loadPdfjs();
+  const candidates: (string | undefined)[] = [undefined, ...passwords];
+  let lastErr = "";
+  for (const pw of candidates) {
+    try {
+      const doc = await pdfjs.getDocument({
+        data: new Uint8Array(buf),
+        password: pw,
+      }).promise;
+      let out = "";
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const c = await page.getTextContent();
+        out +=
+          `\n--- Page ${i} ---\n` +
+          c.items.map((item) => ("str" in item ? item.str : "")).join(" ") +
+          "\n";
+      }
+      return { text: out };
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e);
+      if (!/password/i.test(lastErr)) return { error: lastErr };
+    }
+  }
+  return { error: `Decryption failed. Last error: ${lastErr}` };
+}
 
 export function StatementUploader({
   workspaces,
+  savedPasswords,
 }: {
   workspaces: { id: string; name: string }[];
+  savedPasswords: SavedPassword[];
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -36,6 +91,7 @@ export function StatementUploader({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
+  const [progress, setProgress] = useState<string>("");
 
   async function onParse(e: React.FormEvent) {
     e.preventDefault();
@@ -44,28 +100,44 @@ export function StatementUploader({
     setCommitted(null);
     if (!file) return;
     setParsing(true);
-    const fd = new FormData();
-    fd.append("file", file);
+    setProgress("Reading PDF...");
+
     try {
+      const buf = await file.arrayBuffer();
+      const fd = new FormData();
+
+      const encrypted = await pdfHeaderHasEncrypt(buf);
+      if (encrypted) {
+        setProgress(`Decrypting with ${savedPasswords.length} saved password(s)...`);
+        const result = await extractText(buf, savedPasswords.map((p) => p.password));
+        if ("error" in result) {
+          setError(
+            savedPasswords.length === 0
+              ? "PDF is password-protected but you haven't saved any passwords yet. Add one in the 🔐 panel above."
+              : `Could not decrypt: ${result.error}`
+          );
+          return;
+        }
+        fd.append("text", result.text);
+      } else {
+        fd.append("file", file);
+      }
+
+      setProgress("Sending to Claude for parsing...");
       const res = await fetch("/api/statements/parse", { method: "POST", body: fd });
       const text = await res.text();
       if (!res.ok) {
-        setError(`HTTP ${res.status}: ${text.slice(0, 500) || "(empty response — likely a timeout)"}`);
+        setError(`HTTP ${res.status}: ${text.slice(0, 500) || "(empty)"}`);
         return;
       }
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        setError(`Server returned non-JSON: ${text.slice(0, 500) || "(empty — function timed out)"}`);
-        return;
-      }
+      const json = JSON.parse(text);
       setParsed(json);
       setSelected(new Set(json.transactions.map((_: ParsedTx, i: number) => i)));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setParsing(false);
+      setProgress("");
     }
   }
 
@@ -135,11 +207,11 @@ export function StatementUploader({
           disabled={!file || parsing}
           className="px-3 py-1.5 text-sm rounded-lg bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 disabled:opacity-50"
         >
-          {parsing ? "Parsing with Claude..." : "Parse statement"}
+          {parsing ? progress || "Working..." : "Parse statement"}
         </button>
       </form>
 
-      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+      {error && <p className="mt-3 text-sm text-red-500 break-all">{error}</p>}
       {committed != null && (
         <p className="mt-3 text-sm text-green-600">Saved {committed} transactions ✓</p>
       )}
