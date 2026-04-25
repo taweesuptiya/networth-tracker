@@ -352,6 +352,7 @@ function Row({
           linkBuilder && v !== 0 ? (
             <Link
               href={linkBuilder(v, i)}
+              prefetch={false}
               className="hover:underline hover:text-zinc-900 dark:hover:text-zinc-100"
             >
               {display}
