@@ -52,15 +52,11 @@ async function decryptToText(
   buffer: Buffer,
   passwords: string[]
 ): Promise<{ text: string; passwordUsed: string | null } | { error: string }> {
-  // Stub DOM globals required by pdfjs-dist at module load (text extraction doesn't actually use them)
-  const g = globalThis as unknown as Record<string, unknown>;
-  if (typeof g.DOMMatrix === "undefined") g.DOMMatrix = class {};
-  if (typeof g.Path2D === "undefined") g.Path2D = class {};
-  if (typeof g.ImageData === "undefined") g.ImageData = class {};
-
-  let pdfjs;
+  let getDocumentProxy, extractText;
   try {
-    pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
+    const unpdf = await import("unpdf");
+    getDocumentProxy = unpdf.getDocumentProxy;
+    extractText = unpdf.extractText;
   } catch (e) {
     return { error: `Failed to load PDF library: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -71,24 +67,9 @@ async function decryptToText(
   for (const pw of candidates) {
     try {
       const data = new Uint8Array(buffer);
-      const doc = await pdfjs.getDocument({
-        data,
-        password: pw,
-        useSystemFonts: false,
-        disableFontFace: true,
-        isEvalSupported: false,
-      }).promise;
-
-      let text = "";
-      for (let i = 1; i <= doc.numPages; i++) {
-        const page = await doc.getPage(i);
-        const content = await page.getTextContent();
-        text +=
-          `\n--- Page ${i} ---\n` +
-          content.items.map((item) => ("str" in item ? item.str : "")).join(" ") +
-          "\n";
-      }
-      return { text, passwordUsed: pw ?? null };
+      const pdf = await getDocumentProxy(data, { password: pw });
+      const { text } = await extractText(pdf, { mergePages: true });
+      return { text: text as string, passwordUsed: pw ?? null };
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e);
       if (!/password/i.test(lastErr)) return { error: lastErr };
