@@ -53,8 +53,10 @@ async function extractText(
   let lastErr = "";
   for (const pw of candidates) {
     try {
+      // pdfjs takes ownership of the buffer; clone per attempt so retries work
+      const data = new Uint8Array(buf.slice(0));
       const doc = await pdfjs.getDocument({
-        data: new Uint8Array(buf),
+        data,
         password: pw,
       }).promise;
       let out = "";
