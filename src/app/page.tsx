@@ -4,6 +4,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AssetTable, type Asset } from "@/components/asset-table";
 import { AllocationChart } from "@/components/allocation-chart";
 import { FxEditor } from "@/components/fx-editor";
+import { RefreshButton } from "@/components/refresh-button";
 import { valueInBase, formatMoney } from "@/lib/money";
 
 export default async function Home({
@@ -67,6 +68,7 @@ export default async function Home({
           <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
         </div>
         <div className="flex items-center gap-4">
+          <RefreshButton workspaceId={active.id} />
           <FxEditor workspaceId={active.id} initial={usdToThb} />
           <span className="text-xs text-zinc-500">{user.email}</span>
           <form action="/auth/signout" method="post">
