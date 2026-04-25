@@ -1,14 +1,14 @@
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
 
-export type PriceResult = {
-  price: number;
-  currency: string;
-  source: string;
-} | { error: string };
+const yahoo = new YahooFinance();
+
+export type PriceResult =
+  | { price: number; currency: string; source: string }
+  | { error: string };
 
 export async function fetchYahoo(symbol: string): Promise<PriceResult> {
   try {
-    const q = (await yahooFinance.quote(symbol)) as {
+    const q = (await yahoo.quote(symbol)) as {
       regularMarketPrice?: number;
       currency?: string;
     } | undefined;
@@ -27,24 +27,25 @@ export async function fetchUsdToThb(): Promise<number | null> {
   return res.price;
 }
 
-// Best-effort scraper for Thai mutual fund NAV via finnomena's public API.
-// Fund codes use the AMC's official code (e.g., K-FIRMF, TAIRMF-A).
-// If finnomena's structure changes, this returns null and the user falls back to manual.
+// Thai mutual fund NAV via finnomena's public API.
+// Response: { status, data: { fund_id, short_code, navs: [{ date, value, amount }, ...] } }
 export async function fetchThaiFundNav(code: string): Promise<PriceResult> {
   const url = `https://www.finnomena.com/fn3/api/fund/v2/public/funds/${encodeURIComponent(code)}/nav/q?range=1M`;
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": "networth-tracker/0.1" },
+      headers: { "user-agent": "Mozilla/5.0 networth-tracker" },
       cache: "no-store",
     });
-    if (!res.ok) return { error: `finnomena ${res.status}` };
+    if (!res.ok) return { error: `finnomena ${res.status} for ${code}` };
     const json = await res.json();
-    // Expected: { data: [ { date, value }, ... ] } — get last point.
-    const data = json?.data ?? json?.navList ?? [];
-    const last = Array.isArray(data) && data.length > 0 ? data[data.length - 1] : null;
-    const price = Number(last?.value ?? last?.nav ?? last?.price);
+    const navs = json?.data?.navs;
+    if (!Array.isArray(navs) || navs.length === 0) {
+      return { error: `No NAV data returned for ${code}` };
+    }
+    const last = navs[navs.length - 1];
+    const price = Number(last?.value);
     if (!Number.isFinite(price) || price <= 0) {
-      return { error: `Could not parse NAV for ${code}` };
+      return { error: `Could not parse NAV value for ${code}` };
     }
     return { price, currency: "THB", source: "finnomena" };
   } catch (e) {
