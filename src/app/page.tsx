@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AssetTable, type Asset } from "@/components/asset-table";
 import { AllocationChart } from "@/components/allocation-chart";
 import { FxEditor } from "@/components/fx-editor";
 import { RefreshButton } from "@/components/refresh-button";
+import { AppShell } from "@/components/app-shell";
 import { valueInBase, convertCurrency, formatMoney } from "@/lib/money";
 
 export default async function Home({
@@ -70,33 +70,15 @@ export default async function Home({
   const totalGainPct = totalCost > 0 ? (totalGain! / totalCost) * 100 : null;
 
   return (
-    <div className="flex flex-1 flex-col">
+    <AppShell userEmail={user.email ?? null}>
       <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-semibold">Net Worth</h1>
           <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
         </div>
         <div className="flex items-center gap-4">
-          <Link
-            href="/projection"
-            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Projection →
-          </Link>
-          <Link
-            href="/statements"
-            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Statements →
-          </Link>
           <RefreshButton workspaceId={active.id} />
           <FxEditor workspaceId={active.id} initial={usdToThb} />
-          <span className="text-xs text-zinc-500">{user.email}</span>
-          <form action="/auth/signout" method="post">
-            <button className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-              Sign out
-            </button>
-          </form>
         </div>
       </header>
 
@@ -138,6 +120,6 @@ export default async function Home({
           assets={assets}
         />
       </main>
-    </div>
+    </AppShell>
   );
 }

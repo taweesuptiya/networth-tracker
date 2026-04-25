@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { AppShell } from "@/components/app-shell";
 import { loadProjectionConfig } from "@/app/actions/projection";
 import { ProjectionPageClient } from "@/components/projection-page-client";
 import type { SavedBudget } from "@/components/projection-table";
@@ -74,15 +74,9 @@ export default async function ProjectionPage({
   );
 
   return (
-    <div className="flex flex-1 flex-col">
+    <AppShell userEmail={user.email ?? null}>
       <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
         <div className="flex items-center gap-4">
-          <Link
-            href="/"
-            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-sm"
-          >
-            ← Dashboard
-          </Link>
           <h1 className="text-lg font-semibold">Net worth projection</h1>
           <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
         </div>
@@ -104,6 +98,6 @@ export default async function ProjectionPage({
           startingNetworth={startingNetworth}
         />
       </main>
-    </div>
+    </AppShell>
   );
 }

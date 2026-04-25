@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { StatementUploader } from "@/components/statement-uploader-dynamic";
 import { PdfPasswordsManager } from "@/components/pdf-passwords-manager";
+import { AppShell } from "@/components/app-shell";
 
 export default async function StatementsPage() {
   const supabase = await createClient();
@@ -28,13 +28,10 @@ export default async function StatementsPage() {
     .limit(50);
 
   return (
-    <div className="flex flex-1 flex-col">
+    <AppShell userEmail={user.email ?? null}>
       <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-sm">
-            ← Dashboard
-          </Link>
-          <h1 className="text-lg font-semibold">Statement ingestion</h1>
+          <h1 className="text-lg font-semibold">Upload transactions</h1>
         </div>
       </header>
 
@@ -84,6 +81,6 @@ export default async function StatementsPage() {
           </div>
         </div>
       </main>
-    </div>
+    </AppShell>
   );
 }
