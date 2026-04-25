@@ -41,6 +41,12 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
+const ROUTE_VERSION = "v3-client-decrypt";
+
+export async function GET() {
+  return NextResponse.json({ version: ROUTE_VERSION, ts: new Date().toISOString() });
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
