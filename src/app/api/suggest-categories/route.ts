@@ -7,7 +7,8 @@ export const maxDuration = 60;
 
 type SuggestRequest = {
   transactions: { id: string; description: string; direction: "credit" | "debit"; amount: number }[];
-  existing_categories?: string[]; // user's existing categories to bias toward
+  existing_categories?: string[];
+  workspace_id?: string;
 };
 
 const SCHEMA = {
@@ -49,6 +50,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ suggestions: [] });
     }
 
+    let userInstructions = "";
+    if (body.workspace_id) {
+      const { data } = await supabase
+        .from("workspaces")
+        .select("ai_categorization_instructions")
+        .eq("id", body.workspace_id)
+        .maybeSingle();
+      userInstructions = (data?.ai_categorization_instructions as string | null) ?? "";
+    }
+
     const client = new Anthropic({ apiKey });
 
     const lines = body.transactions
@@ -59,6 +70,9 @@ export async function POST(request: Request) {
       .join("\n");
     const existing = body.existing_categories?.length
       ? `Prefer matching one of these existing user categories when reasonable: ${body.existing_categories.join(", ")}.\n`
+      : "";
+    const userRules = userInstructions.trim()
+      ? `\nUser's specific categorization instructions (FOLLOW THESE STRICTLY when applicable):\n${userInstructions.trim()}\n\n`
       : "";
 
     const stream = client.messages.stream({
@@ -73,11 +87,11 @@ export async function POST(request: Request) {
               type: "text",
               text:
                 "For each bank/card transaction below, suggest a single best-fit expense or income category. " +
-                "Use simple categories like: Dining, Groceries, Subscriptions, Travel, Transport, Bills, Shopping, Health, Salary, Interest, Reimbursement, Transfer, Other. " +
                 "Thai descriptions are fine — interpret them. " +
                 "If the description is clearly a merchant (e.g. 'IHERB', 'NETFLIX', 'AGODA'), pick the obvious category. " +
                 existing +
-                "\n\nTransactions:\n" +
+                userRules +
+                "\nTransactions:\n" +
                 lines,
             },
           ],

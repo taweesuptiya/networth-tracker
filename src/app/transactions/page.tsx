@@ -64,6 +64,7 @@ export default async function TransactionsPage({
           txs={txs}
           accounts={accounts}
           categoriesByType={categoriesByType}
+          workspaceId={active.id}
         />
       </main>
     </AppShell>

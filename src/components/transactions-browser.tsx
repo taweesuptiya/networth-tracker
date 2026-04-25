@@ -38,10 +38,12 @@ export function TransactionsBrowser({
   txs,
   accounts,
   categoriesByType,
+  workspaceId,
 }: {
   txs: Tx[];
   accounts: AccountRef[];
   categoriesByType: Record<string, string[]>;
+  workspaceId: string;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -188,6 +190,7 @@ export function TransactionsBrowser({
         body: JSON.stringify({
           transactions: payload,
           existing_categories: allCategories,
+          workspace_id: workspaceId,
         }),
       });
       const json = await res.json();

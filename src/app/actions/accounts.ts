@@ -52,6 +52,17 @@ export async function deleteRule(id: string) {
   return { error: null };
 }
 
+export async function saveAiInstructions(workspaceId: string, instructions: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("workspaces")
+    .update({ ai_categorization_instructions: instructions })
+    .eq("id", workspaceId);
+  if (error) return { error: error.message };
+  revalidatePath("/accounts");
+  return { error: null };
+}
+
 export async function seedDefaultRules(workspaceId: string) {
   const supabase = await createClient();
   const rows = defaultRules.map((r) => ({ ...r, workspace_id: workspaceId, enabled: true }));

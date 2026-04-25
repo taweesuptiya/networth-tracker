@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AccountsManager } from "@/components/accounts-manager";
 import { RulesManager } from "@/components/rules-manager";
+import { AiInstructionsManager } from "@/components/ai-instructions";
 import type { Account } from "@/components/accounts-manager";
 import type { Rule } from "@/lib/tx-rules";
 
@@ -20,7 +21,7 @@ export default async function AccountsPage({
 
   const { data: workspaces } = await supabase
     .from("workspaces")
-    .select("id, name")
+    .select("id, name, ai_categorization_instructions")
     .order("name");
   if (!workspaces || workspaces.length === 0) redirect("/");
 
@@ -52,6 +53,10 @@ export default async function AccountsPage({
       </header>
       <main className="flex-1 px-6 py-8 max-w-5xl w-full mx-auto">
         <AccountsManager workspaceId={active.id} accounts={accounts} />
+        <AiInstructionsManager
+          workspaceId={active.id}
+          initial={(active as { ai_categorization_instructions?: string }).ai_categorization_instructions ?? ""}
+        />
         <RulesManager workspaceId={active.id} rules={rules} />
       </main>
     </AppShell>
