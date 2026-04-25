@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { commitTransactions, type CommitTx } from "@/app/actions/transactions";
 import { createRule } from "@/app/actions/accounts";
-import { classify, type Rule, type ParsedTx, type ClassifiedTx } from "@/lib/tx-rules";
+import { classify, type Rule, type ClassifiedTx } from "@/lib/tx-rules";
+
+type ParsedTx = {
+  date: string;
+  description: string;
+  amount: number;
+  currency: string;
+  direction: "credit" | "debit";
+  category?: string;
+  card_last4?: string;
+};
 
 type ParseResult = {
   period: { start: string; end: string };
@@ -20,6 +30,7 @@ type Account = {
   id: string;
   name: string;
   type: "savings" | "credit_card" | "cash";
+  last4?: string | null;
 };
 
 const TX_TYPES = [
@@ -106,8 +117,22 @@ export function StatementUploader({
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
   const [progress, setProgress] = useState<string>("");
+  // For multi-card statements: which card_last4 the user is currently reviewing.
+  const [activeCard, setActiveCard] = useState<string>("");
+  // Per-card chosen account (when single PDF has multiple cards).
+  const [cardAccountMap, setCardAccountMap] = useState<Record<string, string>>({});
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
+
+  // Detect distinct card_last4 values in the parsed result; falls back to a single bucket.
+  const cardBuckets = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of (classified as (ClassifiedTx & { card_last4?: string })[])) {
+      if (t.card_last4) set.add(t.card_last4);
+    }
+    return Array.from(set).sort();
+  }, [classified]);
+  const isMultiCard = cardBuckets.length > 1;
 
   async function onParse(e: React.FormEvent) {
     e.preventDefault();
@@ -157,6 +182,19 @@ export function StatementUploader({
       const cls = classify(json.transactions, rules, selectedAccount.type);
       setClassified(cls);
       setSelected(new Set(cls.map((_, i) => i)));
+
+      // Pre-populate per-card account map: try to auto-match by last4
+      const cardSet = new Set<string>();
+      for (const t of (cls as (ClassifiedTx & { card_last4?: string })[])) {
+        if (t.card_last4) cardSet.add(t.card_last4);
+      }
+      const map: Record<string, string> = {};
+      for (const c of cardSet) {
+        const match = accounts.find((a) => a.last4 === c);
+        if (match) map[c] = match.id;
+      }
+      setCardAccountMap(map);
+      setActiveCard(Array.from(cardSet)[0] ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -206,16 +244,24 @@ export function StatementUploader({
     if (!parsed || !workspaceId || !selectedAccount) return;
     const txs: CommitTx[] = classified
       .filter((_, i) => selected.has(i))
-      .map((t) => ({
-        occurred_at: t.date,
-        description: t.description,
-        amount: t.amount,
-        currency: t.currency,
-        direction: t.direction,
-        category: t.category ?? null,
-        tx_type: t.tx_type,
-        account_id: selectedAccount.id,
-      }));
+      .map((t) => {
+        const card = (t as ClassifiedTx & { card_last4?: string }).card_last4;
+        // For multi-card statements: route each tx to the per-card account.
+        const accForTx =
+          isMultiCard && card && cardAccountMap[card]
+            ? cardAccountMap[card]
+            : selectedAccount.id;
+        return {
+          occurred_at: t.date,
+          description: t.description,
+          amount: t.amount,
+          currency: t.currency,
+          direction: t.direction,
+          category: t.category ?? null,
+          tx_type: t.tx_type,
+          account_id: accForTx,
+        };
+      });
     if (txs.length === 0) return;
     startCommit(async () => {
       const res = await commitTransactions(workspaceId, txs);
@@ -225,9 +271,34 @@ export function StatementUploader({
         setParsed(null);
         setClassified([]);
         setFile(null);
+        setCardAccountMap({});
+        setActiveCard("");
         router.refresh();
       }
     });
+  }
+
+  // Filter classified rows by activeCard when multi-card.
+  const visibleIndexes = useMemo(() => {
+    if (!isMultiCard || !activeCard) {
+      return classified.map((_, i) => i);
+    }
+    return classified
+      .map((t, i) =>
+        (t as ClassifiedTx & { card_last4?: string }).card_last4 === activeCard ? i : -1
+      )
+      .filter((i) => i >= 0);
+  }, [classified, isMultiCard, activeCard]);
+
+  function selectVisible() {
+    const next = new Set(selected);
+    for (const i of visibleIndexes) next.add(i);
+    setSelected(next);
+  }
+  function unselectVisible() {
+    const next = new Set(selected);
+    for (const i of visibleIndexes) next.delete(i);
+    setSelected(next);
   }
 
   return (
@@ -311,6 +382,79 @@ export function StatementUploader({
               {selected.size} of {classified.length} selected
             </span>
           </div>
+
+          {isMultiCard && (
+            <div className="rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 p-3 mb-3 text-xs">
+              <p className="mb-2 font-medium">
+                💳 Multi-card statement — {cardBuckets.length} cards detected
+              </p>
+              <p className="text-zinc-600 dark:text-zinc-400 mb-3">
+                Pick which account each card goes to. Click a card to review only its
+                transactions before saving.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {cardBuckets.map((c) => {
+                  const count = classified.filter(
+                    (t) => (t as ClassifiedTx & { card_last4?: string }).card_last4 === c
+                  ).length;
+                  const isActive = activeCard === c;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => setActiveCard(c)}
+                      className={
+                        "px-3 py-1.5 rounded-lg border text-xs " +
+                        (isActive
+                          ? "bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
+                          : "border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800")
+                      }
+                    >
+                      ····{c} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="space-y-1">
+                {cardBuckets.map((c) => (
+                  <div key={c} className="flex items-center gap-2">
+                    <span className="text-zinc-500 w-20 font-mono">····{c}</span>
+                    <span className="text-zinc-500">→</span>
+                    <select
+                      value={cardAccountMap[c] ?? ""}
+                      onChange={(e) =>
+                        setCardAccountMap({ ...cardAccountMap, [c]: e.target.value })
+                      }
+                      className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1"
+                    >
+                      <option value="">— pick account —</option>
+                      {accounts
+                        .filter((a) => a.type === "credit_card")
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                            {a.last4 ? ` (····${a.last4})` : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-3">
+                <button
+                  onClick={selectVisible}
+                  className="text-zinc-600 dark:text-zinc-300 hover:underline"
+                >
+                  Select all on this card
+                </button>
+                <button
+                  onClick={unselectVisible}
+                  className="text-zinc-600 dark:text-zinc-300 hover:underline"
+                >
+                  Unselect all on this card
+                </button>
+              </div>
+            </div>
+          )}
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-3 max-h-[28rem] overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500 sticky top-0">
@@ -324,7 +468,9 @@ export function StatementUploader({
                 </tr>
               </thead>
               <tbody>
-                {classified.map((t, i) => (
+                {visibleIndexes.map((i) => {
+                  const t = classified[i];
+                  return (
                   <tr key={i} className="border-t border-zinc-200 dark:border-zinc-800">
                     <td className="px-3 py-2">
                       <input
@@ -384,7 +530,8 @@ export function StatementUploader({
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

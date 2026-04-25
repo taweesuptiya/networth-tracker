@@ -31,6 +31,11 @@ const SCHEMA = {
           currency: { type: "string" },
           direction: { type: "string", enum: ["credit", "debit"] },
           category: { type: "string" },
+          card_last4: {
+            type: "string",
+            description:
+              "Last 4 digits of the card the transaction belongs to. ONLY set for credit-card statements that contain multiple cards. Leave empty/omit if the statement is for a single card or a bank account.",
+          },
         },
         required: ["date", "description", "amount", "currency", "direction"],
         additionalProperties: false,
