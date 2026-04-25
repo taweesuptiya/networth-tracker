@@ -32,3 +32,46 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
   revalidatePath("/statements");
   return { error: null, count: data?.length ?? rows.length };
 }
+
+export async function updateTransaction(
+  id: string,
+  patch: { tx_type?: string; category?: string | null; description?: string }
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("transactions").update(patch).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/transactions");
+  revalidatePath("/projection");
+  return { error: null };
+}
+
+export async function deleteTransactions(ids: string[]) {
+  if (ids.length === 0) return { error: null, count: 0 };
+  const supabase = await createClient();
+  const { error, data } = await supabase
+    .from("transactions")
+    .delete()
+    .in("id", ids)
+    .select("id");
+  if (error) return { error: error.message, count: 0 };
+  revalidatePath("/transactions");
+  revalidatePath("/projection");
+  return { error: null, count: data?.length ?? ids.length };
+}
+
+export async function bulkUpdateTransactions(
+  ids: string[],
+  patch: { tx_type?: string; category?: string | null }
+) {
+  if (ids.length === 0) return { error: null, count: 0 };
+  const supabase = await createClient();
+  const { error, data } = await supabase
+    .from("transactions")
+    .update(patch)
+    .in("id", ids)
+    .select("id");
+  if (error) return { error: error.message, count: 0 };
+  revalidatePath("/transactions");
+  revalidatePath("/projection");
+  return { error: null, count: data?.length ?? ids.length };
+}

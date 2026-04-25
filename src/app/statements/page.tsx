@@ -33,6 +33,14 @@ export default async function StatementsPage() {
     .order("priority");
   const rules: Rule[] = (ruleRows ?? []) as Rule[];
 
+  const { data: catRows } = await supabase
+    .from("transactions")
+    .select("category")
+    .not("category", "is", null);
+  const existingCategories = Array.from(
+    new Set((catRows ?? []).map((r) => r.category).filter((c): c is string => !!c))
+  ).sort();
+
   const { data: recentTx } = await supabase
     .from("transactions")
     .select("id, occurred_at, description, amount, currency, direction, category, workspace_id")
@@ -54,6 +62,7 @@ export default async function StatementsPage() {
           savedPasswords={pdfPasswords ?? []}
           accounts={accounts ?? []}
           rules={rules}
+          existingCategories={existingCategories}
         />
 
         <div className="mt-10">

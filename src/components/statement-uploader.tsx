@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { commitTransactions, type CommitTx } from "@/app/actions/transactions";
+import { createRule } from "@/app/actions/accounts";
 import { classify, type Rule, type ParsedTx, type ClassifiedTx } from "@/lib/tx-rules";
 
 type ParseResult = {
@@ -85,11 +86,13 @@ export function StatementUploader({
   savedPasswords,
   accounts,
   rules,
+  existingCategories,
 }: {
   workspaces: { id: string; name: string }[];
   savedPasswords: SavedPassword[];
   accounts: Account[];
   rules: Rule[];
+  existingCategories: string[];
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -175,6 +178,30 @@ export function StatementUploader({
     setClassified(next);
   }
 
+  async function onSaveAsRule(i: number) {
+    if (!selectedAccount) return;
+    const t = classified[i];
+    // Suggest a pattern: take first significant 6-30 chars from description, ignoring leading dates/refs
+    const cleaned = t.description.replace(/\s+/g, " ").trim();
+    const pattern = prompt(
+      "Pattern to match (substring; case-insensitive):",
+      cleaned.slice(0, 30)
+    );
+    if (!pattern) return;
+    const res = await createRule({
+      workspace_id: workspaceId,
+      priority: 200,
+      pattern,
+      match_type: "contains",
+      applies_to_account_type: selectedAccount.type,
+      applies_to_direction: t.direction,
+      set_tx_type: t.tx_type,
+      set_category: t.category ?? null,
+    });
+    if (res.error) alert(`Error: ${res.error}`);
+    else alert(`Rule saved: "${pattern}" → ${t.tx_type}${t.category ? " / " + t.category : ""}`);
+  }
+
   function onCommit() {
     if (!parsed || !workspaceId || !selectedAccount) return;
     const txs: CommitTx[] = classified
@@ -205,6 +232,11 @@ export function StatementUploader({
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
+      <datalist id="category-options">
+        {existingCategories.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
       <h2 className="text-sm font-medium text-zinc-500 mb-3">Upload PDF statement</h2>
       {accounts.length === 0 && (
         <p className="text-xs text-amber-600 mb-3">
@@ -324,9 +356,11 @@ export function StatementUploader({
                     </td>
                     <td className="px-3 py-2">
                       <input
+                        list="category-options"
                         value={t.category ?? ""}
                         onChange={(e) => updateTx(i, { category: e.target.value })}
-                        className="w-32 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-1 py-0.5"
+                        placeholder="pick or type new"
+                        className="w-36 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-1 py-0.5"
                       />
                     </td>
                     <td
@@ -336,6 +370,16 @@ export function StatementUploader({
                     >
                       {t.direction === "credit" ? "+" : "−"}
                       {t.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} {t.currency}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => onSaveAsRule(i)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Save this classification as a rule for next time"
+                      >
+                        💡
+                      </button>
                     </td>
                   </tr>
                 ))}
