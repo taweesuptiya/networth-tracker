@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const SCHEMA = {
   type: "object",
@@ -106,12 +106,15 @@ export async function POST(request: Request) {
     }
 
     const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
+    // Stream because max_tokens > 16K can exceed default HTTP timeouts.
+    // 1000 transactions × ~50 tokens/tx ≈ 50K output tokens.
+    const stream = client.messages.stream({
       model: "claude-haiku-4-5",
-      max_tokens: 8000,
+      max_tokens: 64000,
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       messages: [{ role: "user", content: messageContent }],
     });
+    const response = await stream.finalMessage();
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
