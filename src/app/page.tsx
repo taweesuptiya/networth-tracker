@@ -78,6 +78,12 @@ export default async function Home({
         </div>
         <div className="flex items-center gap-4">
           <Link
+            href="/projection"
+            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            Projection →
+          </Link>
+          <Link
             href="/statements"
             className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
