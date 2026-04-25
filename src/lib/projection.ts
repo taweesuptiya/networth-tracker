@@ -173,6 +173,23 @@ export function project(config: ProjectionConfig): MonthRow[] {
   return rows;
 }
 
+// Returns the canonical category list per tx_type, derived from the projection config.
+// Used to populate dropdowns in the statement uploader and transactions browser
+// so that categories stay consistent with the budget tracker.
+export function categoriesByTxType(config: ProjectionConfig): Record<string, string[]> {
+  const expenseCats = config.expenses.map((e) => e.label);
+  return {
+    expense: expenseCats,
+    // Reimbursements offset an expense category, so they share the same list
+    reimbursement: expenseCats,
+    income: ["Salary", "RSU", "Bonus stock", "Bonus cash", "Interest/Dividend", "Other income"],
+    transfer: [],
+    cc_payment: ["KTC card", "UOB card", "Other CC"],
+    cc_payment_received: [],
+    auto: [...expenseCats, "Salary", "RSU", "Bonus stock", "Bonus cash", "Interest/Dividend"],
+  };
+}
+
 // Default config seeded from the user's Dec25 Excel projection
 export function defaultConfig(): ProjectionConfig {
   const now = new Date();

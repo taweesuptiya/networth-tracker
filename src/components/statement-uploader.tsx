@@ -86,13 +86,13 @@ export function StatementUploader({
   savedPasswords,
   accounts,
   rules,
-  existingCategories,
+  categoriesByType,
 }: {
   workspaces: { id: string; name: string }[];
   savedPasswords: SavedPassword[];
   accounts: Account[];
   rules: Rule[];
-  existingCategories: string[];
+  categoriesByType: Record<string, string[]>;
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -232,11 +232,13 @@ export function StatementUploader({
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
-      <datalist id="category-options">
-        {existingCategories.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
+      {Object.entries(categoriesByType).map(([type, list]) => (
+        <datalist key={type} id={`cat-${type}`}>
+          {list.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      ))}
       <h2 className="text-sm font-medium text-zinc-500 mb-3">Upload PDF statement</h2>
       {accounts.length === 0 && (
         <p className="text-xs text-amber-600 mb-3">
@@ -356,7 +358,7 @@ export function StatementUploader({
                     </td>
                     <td className="px-3 py-2">
                       <input
-                        list="category-options"
+                        list={`cat-${t.tx_type}`}
                         value={t.category ?? ""}
                         onChange={(e) => updateTx(i, { category: e.target.value })}
                         placeholder="pick or type new"

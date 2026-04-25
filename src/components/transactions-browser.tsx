@@ -37,9 +37,11 @@ const PAGE_SIZE = 100;
 export function TransactionsBrowser({
   txs,
   accounts,
+  categoriesByType,
 }: {
   txs: Tx[];
   accounts: AccountRef[];
+  categoriesByType: Record<string, string[]>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -202,11 +204,17 @@ export function TransactionsBrowser({
 
   return (
     <>
-      <datalist id="tx-category-options">
-        {allCategories.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
+      {Object.entries(categoriesByType).map(([type, list]) => {
+        // Merge budget categories with any existing user-typed categories of that type
+        const merged = Array.from(new Set([...list, ...allCategories]));
+        return (
+          <datalist key={type} id={`tx-cat-${type}`}>
+            {merged.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        );
+      })}
       {/* Filters */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
         <input
@@ -302,7 +310,7 @@ export function TransactionsBrowser({
             ))}
           </select>
           <input
-            list="tx-category-options"
+            list={bulkType ? `tx-cat-${bulkType}` : "tx-cat-auto"}
             value={bulkCategory}
             onChange={(e) => setBulkCategory(e.target.value)}
             placeholder="— set category —"
@@ -440,7 +448,7 @@ export function TransactionsBrowser({
                     </td>
                     <td className="px-3 py-2">
                       <input
-                        list="tx-category-options"
+                        list={`tx-cat-${t.tx_type}`}
                         defaultValue={t.category ?? ""}
                         onBlur={(e) => {
                           const v = e.target.value.trim();

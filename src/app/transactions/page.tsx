@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { TransactionsBrowser, type Tx, type AccountRef } from "@/components/transactions-browser";
+import { loadProjectionConfig } from "@/app/actions/projection";
+import { categoriesByTxType } from "@/lib/projection";
 
 export default async function TransactionsPage({
   searchParams,
@@ -43,6 +45,9 @@ export default async function TransactionsPage({
     .eq("workspace_id", active.id);
   const accounts: AccountRef[] = accountRows ?? [];
 
+  const projectionConfig = await loadProjectionConfig(active.id);
+  const categoriesByType = categoriesByTxType(projectionConfig);
+
   return (
     <AppShell userEmail={user.email ?? null}>
       <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
@@ -55,7 +60,11 @@ export default async function TransactionsPage({
         </span>
       </header>
       <main className="flex-1 px-6 py-8 max-w-6xl w-full mx-auto">
-        <TransactionsBrowser txs={txs} accounts={accounts} />
+        <TransactionsBrowser
+          txs={txs}
+          accounts={accounts}
+          categoriesByType={categoriesByType}
+        />
       </main>
     </AppShell>
   );

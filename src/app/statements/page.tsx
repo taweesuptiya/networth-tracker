@@ -4,6 +4,8 @@ import { StatementUploader } from "@/components/statement-uploader-dynamic";
 import { PdfPasswordsManager } from "@/components/pdf-passwords-manager";
 import { AppShell } from "@/components/app-shell";
 import type { Rule } from "@/lib/tx-rules";
+import { loadProjectionConfig } from "@/app/actions/projection";
+import { categoriesByTxType } from "@/lib/projection";
 
 export default async function StatementsPage() {
   const supabase = await createClient();
@@ -33,13 +35,14 @@ export default async function StatementsPage() {
     .order("priority");
   const rules: Rule[] = (ruleRows ?? []) as Rule[];
 
-  const { data: catRows } = await supabase
-    .from("transactions")
-    .select("category")
-    .not("category", "is", null);
-  const existingCategories = Array.from(
-    new Set((catRows ?? []).map((r) => r.category).filter((c): c is string => !!c))
-  ).sort();
+  // Use the projection config's categories so dropdowns match the budget tracker
+  const activeWorkspaceId = (workspaces ?? [])[0]?.id;
+  const projectionConfig = activeWorkspaceId
+    ? await loadProjectionConfig(activeWorkspaceId)
+    : null;
+  const categoriesByType = projectionConfig
+    ? categoriesByTxType(projectionConfig)
+    : {};
 
   const { data: recentTx } = await supabase
     .from("transactions")
@@ -62,7 +65,7 @@ export default async function StatementsPage() {
           savedPasswords={pdfPasswords ?? []}
           accounts={accounts ?? []}
           rules={rules}
-          existingCategories={existingCategories}
+          categoriesByType={categoriesByType}
         />
 
         <div className="mt-10">
