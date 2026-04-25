@@ -16,7 +16,12 @@ export function ProjectionPageClient({
 }: {
   workspaceId: string;
   initialConfig: ProjectionConfig;
-  actuals: { month: string; income: number; expense: number }[];
+  actuals: {
+    month: string;
+    income: number;
+    expense: number;
+    expense_by_category?: Record<string, number>;
+  }[];
   savedBudgets: SavedBudget[];
   startingNetworth: number;
 }) {

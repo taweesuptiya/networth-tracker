@@ -32,7 +32,7 @@ export default async function ProjectionPage({
 
   const { data: budgetRows } = await supabase
     .from("monthly_budgets")
-    .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget")
+    .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget, expense_lines")
     .eq("workspace_id", active.id)
     .order("month");
   const savedBudgets: SavedBudget[] = (budgetRows ?? []).map((b) => ({
@@ -41,6 +41,7 @@ export default async function ProjectionPage({
     expense_budget: Number(b.expense_budget),
     net_save_budget: Number(b.net_save_budget),
     total_networth_budget: Number(b.total_networth_budget),
+    expense_lines: (b.expense_lines ?? []) as { label: string; amount: number }[],
   }));
 
   // Aggregate transactions by month for actuals overlay (excludes transfers/cc_payments,
@@ -64,6 +65,7 @@ export default async function ProjectionPage({
     month: m.month,
     income: m.income,
     expense: m.expense,
+    expense_by_category: Object.fromEntries(m.expense_by_category),
   }));
 
   // Starting net worth = current asset total in base currency

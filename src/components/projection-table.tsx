@@ -6,13 +6,19 @@ import type { MonthRow } from "@/lib/projection";
 const fmt = (n: number) =>
   Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-type ActualMonth = { month: string; income: number; expense: number };
+type ActualMonth = {
+  month: string;
+  income: number;
+  expense: number;
+  expense_by_category?: Record<string, number>;
+};
 export type SavedBudget = {
   month: string; // YYYY-MM
   income_budget: number;
   expense_budget: number;
   net_save_budget: number;
   total_networth_budget: number;
+  expense_lines?: { label: string; amount: number }[];
 };
 
 export function ProjectionTable({
@@ -25,10 +31,19 @@ export function ProjectionTable({
   savedBudgets: SavedBudget[];
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [expandExpenses, setExpandExpenses] = useState(false);
   const visible = showAll ? rows : rows.slice(0, 12);
 
   const actualMap = new Map(actuals.map((a) => [a.month, a]));
   const budgetMap = new Map(savedBudgets.map((b) => [b.month, b]));
+
+  // Collect all expense category labels we know about (forecast + budget + actual)
+  const allCategories = new Set<string>();
+  for (const r of visible) for (const e of r.expense_breakdown) allCategories.add(e.label);
+  for (const b of savedBudgets) for (const l of b.expense_lines ?? []) allCategories.add(l.label);
+  for (const a of actuals)
+    if (a.expense_by_category) for (const k of Object.keys(a.expense_by_category)) allCategories.add(k);
+  const categories = Array.from(allCategories).sort();
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-6">
@@ -82,7 +97,11 @@ export function ProjectionTable({
               positiveIsGood
             />
 
-            <Section label="EXPENSES" />
+            <SectionToggle
+              label="EXPENSES"
+              expanded={expandExpenses}
+              onToggle={() => setExpandExpenses((v) => !v)}
+            />
             <Row label="Forecast" values={visible.map((r) => r.expenses)} bold />
             <Row
               label="↳ Budget"
@@ -104,6 +123,36 @@ export function ProjectionTable({
               muted
               variance
             />
+
+            {expandExpenses &&
+              categories.map((cat) => {
+                const forecastVals = visible.map(
+                  (r) => r.expense_breakdown.find((e) => e.label === cat)?.amount ?? 0
+                );
+                const budgetVals = visible.map(
+                  (r) =>
+                    budgetMap.get(r.month)?.expense_lines?.find((l) => l.label === cat)?.amount ??
+                    0
+                );
+                const actualVals = visible.map(
+                  (r) => actualMap.get(r.month)?.expense_by_category?.[cat] ?? 0
+                );
+                const varianceVals = forecastVals.map((_, i) => {
+                  const b = budgetVals[i];
+                  const a = actualVals[i];
+                  return b === 0 || a === 0 ? 0 : a - b;
+                });
+                return (
+                  <CategoryGroup
+                    key={cat}
+                    label={cat}
+                    forecast={forecastVals}
+                    budget={budgetVals}
+                    actual={actualVals}
+                    variance={varianceVals}
+                  />
+                );
+              })}
 
             <Section label="DEDUCTIONS" />
             <Row label="SSO" values={visible.map((r) => r.sso)} />
@@ -169,6 +218,60 @@ function Section({ label }: { label: string }) {
         {label}
       </td>
     </tr>
+  );
+}
+
+function SectionToggle({
+  label,
+  expanded,
+  onToggle,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <tr className="bg-zinc-100 dark:bg-zinc-800/50">
+      <td
+        colSpan={1000}
+        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100"
+        onClick={onToggle}
+      >
+        {expanded ? "▾" : "▸"} {label} {expanded ? "(per category)" : "— click to expand"}
+      </td>
+    </tr>
+  );
+}
+
+function CategoryGroup({
+  label,
+  forecast,
+  budget,
+  actual,
+  variance,
+}: {
+  label: string;
+  forecast: number[];
+  budget: number[];
+  actual: number[];
+  variance: number[];
+}) {
+  return (
+    <>
+      <tr className="border-t border-zinc-200 dark:border-zinc-800">
+        <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap font-medium pl-6">
+          {label}
+        </td>
+        {forecast.map((v, i) => (
+          <td key={i} className="px-3 py-1.5 text-right whitespace-nowrap">
+            {v === 0 ? "—" : fmt(v)}
+          </td>
+        ))}
+      </tr>
+      <Row label="↳ Budget" values={budget} muted />
+      <Row label="↳ Actual" values={actual} muted />
+      <Row label="↳ Variance" values={variance} muted variance />
+    </>
   );
 }
 
