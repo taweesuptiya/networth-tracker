@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 
+// Polyfill DOM globals required by pdfjs (loaded transitively via unpdf)
+// Must run at module load before any pdfjs code instantiates.
+{
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (typeof g.DOMMatrix === "undefined") g.DOMMatrix = class {};
+  if (typeof g.Path2D === "undefined") g.Path2D = class {};
+  if (typeof g.ImageData === "undefined") g.ImageData = class {};
+}
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
