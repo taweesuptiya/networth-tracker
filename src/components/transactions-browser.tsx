@@ -98,8 +98,27 @@ export function TransactionsBrowser({
     setSelected(new Set(pageRows.map((r) => r.id)));
   }
 
+  function selectAllFiltered() {
+    setSelected(new Set(filtered.map((r) => r.id)));
+  }
+
   function clearSelection() {
     setSelected(new Set());
+  }
+
+  const allOnPageSelected =
+    pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
+
+  function togglePage() {
+    if (allOnPageSelected) {
+      const next = new Set(selected);
+      for (const r of pageRows) next.delete(r.id);
+      setSelected(next);
+    } else {
+      const next = new Set(selected);
+      for (const r of pageRows) next.add(r.id);
+      setSelected(next);
+    }
   }
 
   function onBulkUpdate() {
@@ -390,19 +409,47 @@ export function TransactionsBrowser({
         <div className="flex justify-between items-center px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
           <span>
             {filtered.length} transaction{filtered.length === 1 ? "" : "s"}
+            {selected.size > 0 && (
+              <span className="ml-2 text-zinc-700 dark:text-zinc-300">
+                · {selected.size} selected
+              </span>
+            )}
           </span>
-          <button
-            onClick={selectAllVisible}
-            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Select all on page
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={selectAllVisible}
+              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Select page
+            </button>
+            <button
+              onClick={selectAllFiltered}
+              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Select all filtered ({filtered.length})
+            </button>
+            {selected.size > 0 && (
+              <button
+                onClick={clearSelection}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                Clear ({selected.size})
+              </button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500">
               <tr>
-                <th className="px-3 py-2 w-8"></th>
+                <th className="px-3 py-2 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allOnPageSelected}
+                    onChange={togglePage}
+                    title={allOnPageSelected ? "Unselect page" : "Select page"}
+                  />
+                </th>
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Account</th>
                 <th className="px-3 py-2">Description</th>
