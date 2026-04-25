@@ -48,9 +48,16 @@ export function StatementUploader({
     fd.append("file", file);
     try {
       const res = await fetch("/api/statements/parse", { method: "POST", body: fd });
-      const json = await res.json();
+      const text = await res.text();
       if (!res.ok) {
-        setError(json.error ?? `HTTP ${res.status}`);
+        setError(`HTTP ${res.status}: ${text.slice(0, 500) || "(empty response — likely a timeout)"}`);
+        return;
+      }
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        setError(`Server returned non-JSON: ${text.slice(0, 500) || "(empty — function timed out)"}`);
         return;
       }
       setParsed(json);
