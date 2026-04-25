@@ -62,6 +62,7 @@ export function TransactionsBrowser({
   const [bulkCategory, setBulkCategory] = useState<string>("");
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [aiResult, setAiResult] = useState<Record<string, string>>({});
+  const [autofillProgress, setAutofillProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -206,6 +207,78 @@ export function TransactionsBrowser({
     }
   }
 
+  async function onAutofillMissing() {
+    const missing = txs.filter(
+      (t) =>
+        (!t.category || t.category.trim() === "") &&
+        (t.tx_type === "expense" ||
+          t.tx_type === "income" ||
+          t.tx_type === "reimbursement" ||
+          t.tx_type === "auto")
+    );
+    if (missing.length === 0) {
+      alert("No transactions without a category.");
+      return;
+    }
+    if (
+      !confirm(
+        `Auto-fill categories for ${missing.length} transactions using AI? Suggestions apply automatically.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setAutofillProgress(`Starting (${missing.length} transactions)...`);
+    const BATCH = 80;
+    let applied = 0;
+    let failed = 0;
+    try {
+      for (let i = 0; i < missing.length; i += BATCH) {
+        const slice = missing.slice(i, i + BATCH);
+        setAutofillProgress(
+          `Batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(missing.length / BATCH)} (${
+            i + slice.length
+          }/${missing.length}) — calling AI...`
+        );
+        const payload = slice.map((t) => ({
+          id: t.id,
+          description: t.description,
+          direction: t.direction,
+          amount: t.amount,
+        }));
+        const res = await fetch("/api/suggest-categories", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            transactions: payload,
+            existing_categories: allCategories,
+          }),
+        });
+        if (!res.ok) {
+          failed += slice.length;
+          continue;
+        }
+        const json = await res.json();
+        const ids = (json.suggestions ?? []) as { id: string; category: string }[];
+        setAutofillProgress(
+          `Batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(
+            missing.length / BATCH
+          )} — applying ${ids.length} suggestions...`
+        );
+        for (const s of ids) {
+          await updateTransaction(s.id, { category: s.category });
+          applied++;
+        }
+      }
+      setAutofillProgress(`✓ Done. Applied ${applied}, failed ${failed}. Refreshing...`);
+      router.refresh();
+      setTimeout(() => setAutofillProgress(null), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setAutofillProgress(null);
+    }
+  }
+
   function applyAiSuggestions() {
     const ids = Object.keys(aiResult);
     if (ids.length === 0) return;
@@ -235,6 +308,20 @@ export function TransactionsBrowser({
           </datalist>
         );
       })}
+      {/* Top action bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+        <button
+          onClick={onAutofillMissing}
+          disabled={autofillProgress !== null}
+          className="px-3 py-1.5 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 disabled:opacity-50"
+        >
+          ✨ AI fill missing categories
+        </button>
+        {autofillProgress && (
+          <span className="text-zinc-500">{autofillProgress}</span>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
         <input
