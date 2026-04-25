@@ -52,10 +52,15 @@ async function decryptToText(
   buffer: Buffer,
   passwords: string[]
 ): Promise<{ text: string; passwordUsed: string | null } | { error: string }> {
+  // Stub DOM globals required by pdfjs-dist at module load (text extraction doesn't actually use them)
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (typeof g.DOMMatrix === "undefined") g.DOMMatrix = class {};
+  if (typeof g.Path2D === "undefined") g.Path2D = class {};
+  if (typeof g.ImageData === "undefined") g.ImageData = class {};
+
   let pdfjs;
   try {
     pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    // No worker in Node serverless
     if (pdfjs.GlobalWorkerOptions) pdfjs.GlobalWorkerOptions.workerSrc = "";
   } catch (e) {
     return { error: `Failed to load PDF library: ${e instanceof Error ? e.message : String(e)}` };
