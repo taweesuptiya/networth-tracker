@@ -47,11 +47,13 @@ export function ProjectionTable({
   actuals,
   savedBudgets,
   workspaceId,
+  actualSavingByMonth,
 }: {
   rows: MonthRow[];
   actuals: ActualMonth[];
   savedBudgets: SavedBudget[];
   workspaceId: string;
+  actualSavingByMonth: Record<string, number>;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [expandExpenses, setExpandExpenses] = useState(false);
@@ -224,7 +226,12 @@ export function ProjectionTable({
             />
 
             <Section label="ASSET BALANCES (forecast end of month)" />
-            <Row label="Saving" values={visible.map((r) => r.saving_balance)} />
+            <Row label="Saving (forecast)" values={visible.map((r) => r.saving_balance)} />
+            <Row
+              label="↳ Saving (actual, from income−expense)"
+              values={visible.map((r) => actualSavingByMonth[r.month] ?? 0)}
+              muted
+            />
             <Row label="Stock" values={visible.map((r) => r.stock_balance)} />
             <Row label="PVD" values={visible.map((r) => r.pvd_balance)} />
             <Row label="SSF+RMF" values={visible.map((r) => r.ssf_rmf_balance)} />
@@ -233,6 +240,16 @@ export function ProjectionTable({
               values={visible.map((r) => r.total_networth)}
               bold
               highlight
+            />
+            <Row
+              label="↳ Total (actual, replaces saving with actual)"
+              values={visible.map((r) => {
+                const actualSaving = actualSavingByMonth[r.month];
+                if (actualSaving == null) return 0;
+                // Replace the forecast saving balance with the actual one
+                return r.total_networth - r.saving_balance + actualSaving;
+              })}
+              muted
             />
             <Row
               label="↳ Budget snapshot"

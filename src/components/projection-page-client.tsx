@@ -68,14 +68,19 @@ export function ProjectionPageClient({
   }
 
   // Build a "running actual networth" using cumulative net cash flow anchored at startingNetworth.
+  // Also build per-month "actual saving balance" so the asset table can reflect real income-expense.
   const actualsByMonth = new Map(actuals.map((a) => [a.month, a]));
   const actualNetworth: { month: string; total: number }[] = [];
+  const actualSavingByMonth = new Map<string, number>();
   let runningActual = startingNetworth;
+  let runningSaving = initialConfig.starting.savings;
   for (const r of rows) {
     const a = actualsByMonth.get(r.month);
     if (a) {
       runningActual += a.income - a.expense;
       actualNetworth.push({ month: r.month, total: runningActual });
+      runningSaving += a.income - a.expense;
+      actualSavingByMonth.set(r.month, runningSaving);
     }
   }
 
@@ -118,6 +123,7 @@ export function ProjectionPageClient({
         actuals={actuals}
         savedBudgets={budgets}
         workspaceId={workspaceId}
+        actualSavingByMonth={Object.fromEntries(actualSavingByMonth)}
       />
     </>
   );
