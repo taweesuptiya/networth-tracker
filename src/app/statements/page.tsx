@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { StatementUploader } from "@/components/statement-uploader";
+import { StatementUploader } from "@/components/statement-uploader-dynamic";
 import { PdfPasswordsManager } from "@/components/pdf-passwords-manager";
 
 export default async function StatementsPage() {
