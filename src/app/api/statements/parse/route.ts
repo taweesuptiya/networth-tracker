@@ -60,8 +60,7 @@ async function decryptToText(
 
   let pdfjs;
   try {
-    pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    if (pdfjs.GlobalWorkerOptions) pdfjs.GlobalWorkerOptions.workerSrc = "";
+    pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
   } catch (e) {
     return { error: `Failed to load PDF library: ${e instanceof Error ? e.message : String(e)}` };
   }
