@@ -111,7 +111,12 @@ export function ProjectionPageClient({
       />
       <NetworthChart rows={rows} actuals={actualNetworth} />
       <CashFlowChart rows={rows} actuals={actuals} />
-      <ProjectionTable rows={rows} actuals={actuals} savedBudgets={budgets} />
+      <ProjectionTable
+        rows={rows}
+        actuals={actuals}
+        savedBudgets={budgets}
+        workspaceId={workspaceId}
+      />
     </>
   );
 }

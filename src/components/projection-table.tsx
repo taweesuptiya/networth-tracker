@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { MonthRow } from "@/lib/projection";
 
 const fmt = (n: number) =>
@@ -21,14 +22,34 @@ export type SavedBudget = {
   expense_lines?: { label: string; amount: number }[];
 };
 
+function monthRange(month: string): { from: string; to: string } {
+  // month = "YYYY-MM"
+  const [y, m] = month.split("-").map(Number);
+  const from = `${y}-${String(m).padStart(2, "0")}-01`;
+  // last day of month
+  const lastDay = new Date(y, m, 0).getDate();
+  const to = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
+
+function txLink(workspaceId: string, month: string, opts: { category?: string; tx_type?: string }) {
+  const { from, to } = monthRange(month);
+  const params = new URLSearchParams({ ws: workspaceId, from, to });
+  if (opts.category) params.set("category", opts.category);
+  if (opts.tx_type) params.set("tx_type", opts.tx_type);
+  return `/transactions?${params.toString()}`;
+}
+
 export function ProjectionTable({
   rows,
   actuals,
   savedBudgets,
+  workspaceId,
 }: {
   rows: MonthRow[];
   actuals: ActualMonth[];
   savedBudgets: SavedBudget[];
+  workspaceId: string;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [expandExpenses, setExpandExpenses] = useState(false);
@@ -84,6 +105,7 @@ export function ProjectionTable({
               label="↳ Actual"
               values={visible.map((r) => actualMap.get(r.month)?.income ?? 0)}
               muted
+              linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { tx_type: "income" })}
             />
             <Row
               label="↳ Variance (Actual − Budget)"
@@ -112,6 +134,7 @@ export function ProjectionTable({
               label="↳ Actual"
               values={visible.map((r) => actualMap.get(r.month)?.expense ?? 0)}
               muted
+              linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { tx_type: "expense" })}
             />
             <Row
               label="↳ Variance (Actual − Budget)"
@@ -150,6 +173,7 @@ export function ProjectionTable({
                     budget={budgetVals}
                     actual={actualVals}
                     variance={varianceVals}
+                    linkBuilder={(i) => txLink(workspaceId, visible[i].month, { category: cat })}
                   />
                 );
               })}
@@ -249,13 +273,17 @@ function CategoryGroup({
   budget,
   actual,
   variance,
+  linkBuilder,
 }: {
   label: string;
   forecast: number[];
   budget: number[];
   actual: number[];
   variance: number[];
+  linkBuilder: (i: number) => string;
 }) {
+  // % of budget used per month (Actual / Budget)
+  const pctOfBudget = actual.map((a, i) => (budget[i] > 0 ? (a / budget[i]) * 100 : 0));
   return (
     <>
       <tr className="border-t border-zinc-200 dark:border-zinc-800">
@@ -269,7 +297,8 @@ function CategoryGroup({
         ))}
       </tr>
       <Row label="↳ Budget" values={budget} muted />
-      <Row label="↳ Actual" values={actual} muted />
+      <Row label="↳ Actual" values={actual} muted linkBuilder={linkBuilder} />
+      <Row label="↳ % of budget" values={pctOfBudget} muted percent />
       <Row label="↳ Variance" values={variance} muted variance />
     </>
   );
@@ -284,6 +313,7 @@ function Row({
   percent,
   variance,
   positiveIsGood,
+  linkBuilder,
 }: {
   label: string;
   values: number[];
@@ -293,6 +323,7 @@ function Row({
   percent?: boolean;
   variance?: boolean;
   positiveIsGood?: boolean;
+  linkBuilder?: (value: number, index: number) => string;
 }) {
   return (
     <tr
@@ -312,13 +343,25 @@ function Row({
           if (v > 0) cls += positiveIsGood ? "text-green-600 " : "text-red-500 ";
           else if (v < 0) cls += positiveIsGood ? "text-red-500 " : "text-green-600 ";
         }
+        const display = percent
+          ? `${v.toFixed(1)}%`
+          : v === 0
+            ? "—"
+            : (variance && v > 0 ? "+" : "") + fmt(v);
+        const inner =
+          linkBuilder && v !== 0 ? (
+            <Link
+              href={linkBuilder(v, i)}
+              className="hover:underline hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              {display}
+            </Link>
+          ) : (
+            display
+          );
         return (
           <td key={i} className={cls}>
-            {percent
-              ? `${v.toFixed(1)}%`
-              : v === 0
-                ? "—"
-                : (variance && v > 0 ? "+" : "") + fmt(v)}
+            {inner}
           </td>
         );
       })}

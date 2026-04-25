@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   bulkUpdateTransactions,
   deleteTransactions,
@@ -44,16 +44,17 @@ export function TransactionsBrowser({
   categoriesByType: Record<string, string[]>;
 }) {
   const router = useRouter();
+  const sp = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [page, setPage] = useState(0);
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [accountId, setAccountId] = useState<string>("");
-  const [txType, setTxType] = useState<string>("");
-  const [category, setCategory] = useState<string>("");
-  const [from, setFrom] = useState<string>("");
-  const [to, setTo] = useState<string>("");
+  // Filters — seed initial values from URL search params so deep links from Projection work
+  const [search, setSearch] = useState(sp.get("q") ?? "");
+  const [accountId, setAccountId] = useState<string>(sp.get("account") ?? "");
+  const [txType, setTxType] = useState<string>(sp.get("tx_type") ?? "");
+  const [category, setCategory] = useState<string>(sp.get("category") ?? "");
+  const [from, setFrom] = useState<string>(sp.get("from") ?? "");
+  const [to, setTo] = useState<string>(sp.get("to") ?? "");
 
   // Selection + AI suggestion state
   const [selected, setSelected] = useState<Set<string>>(new Set());
