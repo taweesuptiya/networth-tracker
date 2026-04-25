@@ -4,7 +4,7 @@
 
 do $$
 declare
-  my_uid uuid := '00000000-0000-0000-0000-000000000000'; -- <<< REPLACE THIS
+  my_uid uuid := '7afb29c2-e915-45a7-b014-d9c55fc8fe0e';
   ws_personal uuid;
   ws_marriage uuid;
 begin

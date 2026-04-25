@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AssetTable, type Asset } from "@/components/asset-table";
@@ -76,6 +77,12 @@ export default async function Home({
           <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
         </div>
         <div className="flex items-center gap-4">
+          <Link
+            href="/statements"
+            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            Statements →
+          </Link>
           <RefreshButton workspaceId={active.id} />
           <FxEditor workspaceId={active.id} initial={usdToThb} />
           <span className="text-xs text-zinc-500">{user.email}</span>

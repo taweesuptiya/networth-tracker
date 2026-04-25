@@ -3,7 +3,7 @@
 
 do $$
 declare
-  my_uid uuid := '00000000-0000-0000-0000-000000000000'; -- <<< REPLACE
+  my_uid uuid := '7afb29c2-e915-45a7-b014-d9c55fc8fe0e';
   ws uuid;
 begin
   if my_uid = '00000000-0000-0000-0000-000000000000' then
