@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { StatementUploader } from "@/components/statement-uploader";
+import { PdfPasswordsManager } from "@/components/pdf-passwords-manager";
 
 export default async function StatementsPage() {
   const supabase = await createClient();
@@ -14,6 +15,11 @@ export default async function StatementsPage() {
     .from("workspaces")
     .select("id, name")
     .order("name");
+
+  const { data: pdfPasswords } = await supabase
+    .from("pdf_passwords")
+    .select("id, label, password")
+    .order("created_at");
 
   const { data: recentTx } = await supabase
     .from("transactions")
@@ -33,6 +39,7 @@ export default async function StatementsPage() {
       </header>
 
       <main className="flex-1 px-6 py-8 max-w-5xl w-full mx-auto">
+        <PdfPasswordsManager initial={pdfPasswords ?? []} />
         <StatementUploader workspaces={workspaces ?? []} />
 
         <div className="mt-10">

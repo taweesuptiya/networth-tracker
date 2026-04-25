@@ -5,14 +5,64 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type ParsedTx = {
-  date: string;
-  description: string;
-  amount: number;
-  currency: string;
-  direction: "credit" | "debit";
-  category?: string;
-};
+type ExtractResult =
+  | { ok: true; text: string; passwordUsed: string | null }
+  | { ok: false; error: string; needsPassword: boolean };
+
+async function extractText(buffer: Buffer, passwords: string[]): Promise<ExtractResult> {
+  // Use pdfjs-dist legacy build (Node-friendly, no DOM required)
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  // Disable worker — run on main thread (serverless-friendly)
+  pdfjs.GlobalWorkerOptions.workerSrc = "";
+
+  // Try with no password first, then each saved password.
+  const candidates: (string | undefined)[] = [undefined, ...passwords];
+  let lastErr: unknown = null;
+  let needsPassword = false;
+
+  for (const pw of candidates) {
+    try {
+      const data = new Uint8Array(buffer);
+      const loadingTask = pdfjs.getDocument({
+        data,
+        password: pw,
+        useSystemFonts: false,
+        disableFontFace: true,
+        isEvalSupported: false,
+      });
+      const doc = await loadingTask.promise;
+
+      let text = "";
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ");
+        text += `\n--- Page ${i} ---\n${pageText}\n`;
+      }
+      return { ok: true, text, passwordUsed: pw ?? null };
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/password/i.test(msg)) {
+        needsPassword = true;
+        continue;
+      }
+      // non-password error — stop trying
+      return { ok: false, error: msg, needsPassword: false };
+    }
+  }
+
+  return {
+    ok: false,
+    error:
+      needsPassword
+        ? "PDF is password-protected and none of your saved passwords worked."
+        : `Could not open PDF: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
+    needsPassword,
+  };
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -39,7 +89,20 @@ export async function POST(request: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const base64 = buffer.toString("base64");
+
+  // Load user's saved PDF passwords (RLS scopes to this user)
+  const { data: pwRows } = await supabase
+    .from("pdf_passwords")
+    .select("password");
+  const passwords = (pwRows ?? []).map((r) => r.password as string);
+
+  const extracted = await extractText(buffer, passwords);
+  if (!extracted.ok) {
+    return NextResponse.json(
+      { error: extracted.error, needsPassword: extracted.needsPassword },
+      { status: 400 }
+    );
+  }
 
   const client = new Anthropic({ apiKey });
 
@@ -79,11 +142,13 @@ export async function POST(request: Request) {
                   direction: {
                     type: "string",
                     enum: ["credit", "debit"],
-                    description: "credit = money in (deposit, refund); debit = money out (purchase, withdrawal)",
+                    description:
+                      "credit = money in (deposit, refund); debit = money out (purchase, withdrawal)",
                   },
                   category: {
                     type: "string",
-                    description: "Best-guess category: Food, Transport, Shopping, Bills, Salary, Transfer, ATM, Fee, Other",
+                    description:
+                      "Best-guess category: Food, Transport, Shopping, Bills, Salary, Transfer, ATM, Fee, Other",
                   },
                 },
                 required: ["date", "description", "amount", "currency", "direction"],
@@ -101,17 +166,15 @@ export async function POST(request: Request) {
         role: "user",
         content: [
           {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: base64 },
-          },
-          {
             type: "text",
             text:
-              "Extract all transactions from this bank or credit card statement. " +
-              "Return them as structured JSON. Dates must be ISO format (YYYY-MM-DD). " +
-              "Amounts are always positive numbers; use the direction field to indicate credit (money in) or debit (money out). " +
-              "If the statement is in Thai, translate descriptions to English where possible but keep merchant names in original form. " +
-              "Skip running balance entries — only include actual transactions.",
+              "The following text was extracted from a bank or credit card statement PDF. " +
+              "Extract all transactions as structured JSON. Dates must be ISO YYYY-MM-DD. " +
+              "Amounts are always positive — use the direction field to indicate credit (money in) or debit (money out). " +
+              "If descriptions are in Thai, translate to English where helpful but keep merchant names in original form. " +
+              "Skip running balance entries and statement-summary lines — only include actual transactions.\n\n" +
+              "=== STATEMENT TEXT ===\n" +
+              extracted.text,
           },
         ],
       },
@@ -138,7 +201,8 @@ export async function POST(request: Request) {
     currency: parsed.currency,
     account_holder: parsed.account_holder ?? null,
     account_number: parsed.account_number_masked ?? null,
-    transactions: parsed.transactions as ParsedTx[],
+    transactions: parsed.transactions,
+    decrypted_with: extracted.passwordUsed ? "saved-password" : "no-password",
     usage: response.usage,
   });
 }
