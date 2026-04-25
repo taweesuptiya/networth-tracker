@@ -186,8 +186,8 @@ export function ProjectionTable({
                     reimbursement={reimbVals}
                     actual={netVals}
                     variance={varianceVals}
-                    linkBuilder={(i) => txLink(workspaceId, visible[i].month, { category: cat })}
-                    reimbLinkBuilder={(i) =>
+                    linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { category: cat })}
+                    reimbLinkBuilder={(_v, i) =>
                       txLink(workspaceId, visible[i].month, { category: cat, tx_type: "reimbursement" })
                     }
                   />
@@ -301,8 +301,8 @@ function CategoryGroup({
   reimbursement: number[];
   actual: number[]; // net = gross - reimbursement
   variance: number[];
-  linkBuilder: (i: number) => string;
-  reimbLinkBuilder: (i: number) => string;
+  linkBuilder: (value: number, index: number) => string;
+  reimbLinkBuilder: (value: number, index: number) => string;
 }) {
   const pctOfBudget = actual.map((a, i) => (budget[i] > 0 ? (a / budget[i]) * 100 : 0));
   const hasReimb = reimbursement.some((v) => v > 0);
