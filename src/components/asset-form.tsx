@@ -18,6 +18,7 @@ export type AssetFormData = {
   units: string;
   price_per_unit: string;
   manual_value: string;
+  cost_basis: string;
   currency: string;
   notes: string;
 };
@@ -30,6 +31,7 @@ const empty: AssetFormData = {
   units: "",
   price_per_unit: "",
   manual_value: "",
+  cost_basis: "",
   currency: "THB",
   notes: "",
 };
@@ -64,6 +66,7 @@ export function AssetForm({
       units: data.units === "" ? null : Number(data.units),
       price_per_unit: data.price_per_unit === "" ? null : Number(data.price_per_unit),
       manual_value: data.manual_value === "" ? null : Number(data.manual_value),
+      cost_basis: data.cost_basis === "" ? null : Number(data.cost_basis),
       currency: data.currency.trim() || "THB",
       notes: data.notes.trim() || null,
     };
@@ -175,6 +178,17 @@ export function AssetForm({
               step="any"
               value={data.manual_value}
               onChange={(e) => update("manual_value", e.target.value)}
+              className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1.5"
+            />
+          </label>
+
+          <label className="col-span-2 flex flex-col gap-1">
+            Cost basis (original purchase value, in asset currency)
+            <input
+              type="number"
+              step="any"
+              value={data.cost_basis}
+              onChange={(e) => update("cost_basis", e.target.value)}
               className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1.5"
             />
           </label>

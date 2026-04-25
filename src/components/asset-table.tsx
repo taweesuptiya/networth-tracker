@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { AssetForm, type AssetFormData } from "./asset-form";
 import { deleteAsset } from "@/app/actions/assets";
-import { rawValue, valueInBase, formatMoney } from "@/lib/money";
+import { rawValue, valueInBase, convertCurrency, formatMoney } from "@/lib/money";
 
 export type Asset = {
   id: string;
@@ -14,6 +14,7 @@ export type Asset = {
   units: number | null;
   price_per_unit: number | null;
   manual_value: number | null;
+  cost_basis: number | null;
   currency: string;
   notes: string | null;
 };
@@ -43,6 +44,7 @@ export function AssetTable({
       units: a.units?.toString() ?? "",
       price_per_unit: a.price_per_unit?.toString() ?? "",
       manual_value: a.manual_value?.toString() ?? "",
+      cost_basis: a.cost_basis?.toString() ?? "",
       currency: a.currency,
       notes: a.notes ?? "",
     });
@@ -67,30 +69,38 @@ export function AssetTable({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-xs uppercase text-zinc-500">
             <tr>
               <th className="px-4 py-3">Asset</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3 text-right">Units</th>
-              <th className="px-4 py-3 text-right">Price</th>
-              <th className="px-4 py-3 text-right">Raw</th>
+              <th className="px-4 py-3 text-right">NAV / Price</th>
+              <th className="px-4 py-3 text-right">Cost ({baseCurrency})</th>
               <th className="px-4 py-3 text-right">Value ({baseCurrency})</th>
+              <th className="px-4 py-3 text-right">Gain</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {assets.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
                   No assets yet. Click + Add asset.
                 </td>
               </tr>
             ) : (
               assets.map((a) => {
-                const raw = rawValue(a);
-                const base = valueInBase(a, baseCurrency, usdToThb);
+                const value = valueInBase(a, baseCurrency, usdToThb);
+                const cost =
+                  a.cost_basis != null
+                    ? convertCurrency(Number(a.cost_basis), a.currency, baseCurrency, usdToThb)
+                    : null;
+                const gain = cost != null ? value - cost : null;
+                const gainPct = cost != null && cost !== 0 ? (gain! / cost) * 100 : null;
+                const gainColor =
+                  gain == null ? "text-zinc-400" : gain >= 0 ? "text-green-600" : "text-red-500";
                 return (
                   <tr key={a.id} className="border-t border-zinc-200 dark:border-zinc-800">
                     <td className="px-4 py-3">
@@ -100,13 +110,27 @@ export function AssetTable({
                       )}
                     </td>
                     <td className="px-4 py-3 text-zinc-500">{a.type}</td>
-                    <td className="px-4 py-3 text-right">{a.units ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{a.price_per_unit ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      {a.units != null ? Number(a.units).toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {a.price_per_unit != null ? Number(a.price_per_unit).toFixed(4) : "—"}
+                    </td>
                     <td className="px-4 py-3 text-right text-zinc-500">
-                      {formatMoney(raw, a.currency)}
+                      {cost != null ? formatMoney(cost, baseCurrency) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-medium">
-                      {formatMoney(base, baseCurrency)}
+                      {formatMoney(value, baseCurrency)}
+                    </td>
+                    <td className={`px-4 py-3 text-right ${gainColor}`}>
+                      {gain != null ? (
+                        <div>
+                          <div>{gain >= 0 ? "+" : ""}{formatMoney(gain, baseCurrency)}</div>
+                          <div className="text-xs">
+                            {gainPct! >= 0 ? "+" : ""}{gainPct!.toFixed(2)}%
+                          </div>
+                        </div>
+                      ) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button

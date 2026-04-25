@@ -12,6 +12,7 @@ export type AssetInput = {
   units?: number | null;
   price_per_unit?: number | null;
   manual_value?: number | null;
+  cost_basis?: number | null;
   currency: string;
   notes?: string | null;
 };

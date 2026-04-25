@@ -10,6 +10,18 @@ export function rawValue(a: AssetRow): number {
   return (Number(a.units ?? 0)) * (Number(a.price_per_unit ?? 0));
 }
 
+export function convertCurrency(
+  amount: number,
+  from: string,
+  to: string,
+  usdToThb: number
+): number {
+  if (from === to) return amount;
+  if (from === "USD" && to === "THB") return amount * usdToThb;
+  if (from === "THB" && to === "USD") return amount / usdToThb;
+  return amount;
+}
+
 export function valueInBase(a: AssetRow, baseCurrency: string, usdToThb: number): number {
   const raw = rawValue(a);
   if (a.currency === baseCurrency) return raw;
