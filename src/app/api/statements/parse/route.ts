@@ -81,7 +81,10 @@ export async function POST(request: Request) {
             "Extract all transactions as structured JSON. Dates ISO YYYY-MM-DD. " +
             "Amounts always positive — use direction (credit=in, debit=out). " +
             "Translate Thai descriptions to English where helpful but keep merchant names. " +
-            "Skip running balance entries — only actual transactions.\n\n" +
+            "Skip running balance entries — only actual transactions. " +
+            "If the statement contains MULTIPLE credit cards (e.g. UOB combined statement listing several card numbers like '5265 32XX XXXX 5949' / '4033 75XX XXXX 5758'), " +
+            "set card_last4 on each transaction to the last 4 digits of the card it belongs to. " +
+            "If only one card or it's a bank statement, leave card_last4 empty.\n\n" +
             "=== STATEMENT TEXT ===\n" +
             extractedText,
         },
