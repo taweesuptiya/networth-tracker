@@ -166,8 +166,9 @@ export async function POST(request: Request) {
     }
 
     const response = await client.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 16000,
+      model: "claude-sonnet-4-6",
+      max_tokens: 8000,
+      thinking: { type: "disabled" },
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       messages: [{ role: "user", content: messageContent }],
     });
