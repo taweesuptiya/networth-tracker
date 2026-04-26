@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { commitTransactions, type CommitTx } from "@/app/actions/transactions";
+import { commitTransactions, checkForDuplicates, type CommitTx } from "@/app/actions/transactions";
 import { createRule } from "@/app/actions/accounts";
 import { classify, type Rule, type ClassifiedTx } from "@/lib/tx-rules";
 
@@ -116,7 +116,9 @@ export function StatementUploader({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
+  const [skippedDup, setSkippedDup] = useState<number>(0);
   const [progress, setProgress] = useState<string>("");
+  const [dupes, setDupes] = useState<boolean[]>([]);
   // For multi-card statements: which card_last4 buckets the user has visible (multi-select).
   const [activeCards, setActiveCards] = useState<Set<string>>(new Set());
   // Per-card chosen account (when single PDF has multiple cards).
@@ -182,7 +184,21 @@ export function StatementUploader({
       // Apply rules client-side based on selected account type
       const cls = classify(json.transactions, rules, selectedAccount.type);
       setClassified(cls);
-      setSelected(new Set(cls.map((_, i) => i)));
+
+      // Check duplicates against DB
+      setProgress("Checking for duplicates...");
+      const dupFlags = await checkForDuplicates(
+        workspaceId,
+        cls.map((t) => ({
+          occurred_at: t.date,
+          amount: t.amount,
+          direction: t.direction,
+          description: t.description,
+        }))
+      );
+      setDupes(dupFlags);
+      // Auto-select all non-duplicates only
+      setSelected(new Set(cls.map((_, i) => i).filter((i) => !dupFlags[i])));
 
       // Pre-populate per-card account map: try to auto-match by last4
       const cardSet = new Set<string>();
@@ -269,8 +285,10 @@ export function StatementUploader({
       if (res.error) setError(res.error);
       else {
         setCommitted(res.count);
+        setSkippedDup(res.skipped ?? 0);
         setParsed(null);
         setClassified([]);
+        setDupes([]);
         setFile(null);
         setCardAccountMap({});
         setActiveCards(new Set());
@@ -377,7 +395,14 @@ export function StatementUploader({
 
       {error && <p className="mt-3 text-sm text-red-500 break-all">{error}</p>}
       {committed != null && (
-        <p className="mt-3 text-sm text-green-600">Saved {committed} transactions ✓</p>
+        <p className="mt-3 text-sm text-green-600">
+          Saved {committed} transactions ✓
+          {skippedDup > 0 && (
+            <span className="text-zinc-500 ml-2">
+              (skipped {skippedDup} duplicate{skippedDup === 1 ? "" : "s"})
+            </span>
+          )}
+        </p>
       )}
 
       {parsed && classified.length > 0 && (
@@ -386,6 +411,11 @@ export function StatementUploader({
             <span>
               Period: {parsed.period.start} → {parsed.period.end} · Currency: {parsed.currency}
               {parsed.account_number ? ` · Account ${parsed.account_number}` : ""}
+              {dupes.filter(Boolean).length > 0 && (
+                <span className="ml-3 text-oxblood">
+                  · {dupes.filter(Boolean).length} duplicate{dupes.filter(Boolean).length === 1 ? "" : "s"} detected
+                </span>
+              )}
             </span>
             <span>
               {selected.size} of {classified.length} selected
@@ -491,8 +521,15 @@ export function StatementUploader({
               <tbody>
                 {visibleIndexes.map((i) => {
                   const t = classified[i];
+                  const isDup = dupes[i];
                   return (
-                  <tr key={i} className="border-t border-zinc-200 dark:border-zinc-800">
+                  <tr
+                    key={i}
+                    className={
+                      "border-t border-zinc-200 dark:border-zinc-800 " +
+                      (isDup ? "opacity-50 bg-paper-darker" : "")
+                    }
+                  >
                     <td className="px-3 py-2">
                       <input
                         type="checkbox"
@@ -502,6 +539,14 @@ export function StatementUploader({
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{t.date}</td>
                     <td className="px-3 py-2 max-w-64 truncate" title={t.description}>
+                      {isDup && (
+                        <span
+                          className="inline-block mr-2 text-[10px] uppercase tracking-wider text-oxblood"
+                          title="Already exists in DB"
+                        >
+                          ↻ dup
+                        </span>
+                      )}
                       {t.description}
                     </td>
                     <td className="px-3 py-2">
