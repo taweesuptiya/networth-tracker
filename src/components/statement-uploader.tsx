@@ -117,8 +117,8 @@ export function StatementUploader({
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
   const [progress, setProgress] = useState<string>("");
-  // For multi-card statements: which card_last4 the user is currently reviewing.
-  const [activeCard, setActiveCard] = useState<string>("");
+  // For multi-card statements: which card_last4 buckets the user has visible (multi-select).
+  const [activeCards, setActiveCards] = useState<Set<string>>(new Set());
   // Per-card chosen account (when single PDF has multiple cards).
   const [cardAccountMap, setCardAccountMap] = useState<Record<string, string>>({});
 
@@ -195,7 +195,7 @@ export function StatementUploader({
         if (match) map[c] = match.id;
       }
       setCardAccountMap(map);
-      setActiveCard(Array.from(cardSet)[0] ?? "");
+      setActiveCards(new Set(cardSet));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -279,17 +279,25 @@ export function StatementUploader({
     });
   }
 
-  // Filter classified rows by activeCard when multi-card.
+  // Filter classified rows by which card buckets are active.
   const visibleIndexes = useMemo(() => {
-    if (!isMultiCard || !activeCard) {
+    if (!isMultiCard || activeCards.size === 0) {
       return classified.map((_, i) => i);
     }
     return classified
-      .map((t, i) =>
-        (t as ClassifiedTx & { card_last4?: string }).card_last4 === activeCard ? i : -1
-      )
+      .map((t, i) => {
+        const c = (t as ClassifiedTx & { card_last4?: string }).card_last4;
+        return c && activeCards.has(c) ? i : -1;
+      })
       .filter((i) => i >= 0);
-  }, [classified, isMultiCard, activeCard]);
+  }, [classified, isMultiCard, activeCards]);
+
+  function toggleCard(c: string) {
+    const next = new Set(activeCards);
+    if (next.has(c)) next.delete(c);
+    else next.add(c);
+    setActiveCards(next);
+  }
 
   function selectVisible() {
     const next = new Set(selected);
@@ -398,11 +406,11 @@ export function StatementUploader({
                   const count = classified.filter(
                     (t) => (t as ClassifiedTx & { card_last4?: string }).card_last4 === c
                   ).length;
-                  const isActive = activeCard === c;
+                  const isActive = activeCards.has(c);
                   return (
                     <button
                       key={c}
-                      onClick={() => setActiveCard(c)}
+                      onClick={() => toggleCard(c)}
                       className={
                         "px-3 py-1.5 rounded-lg border text-xs " +
                         (isActive
@@ -410,10 +418,22 @@ export function StatementUploader({
                           : "border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800")
                       }
                     >
-                      ····{c} ({count})
+                      {isActive ? "✓ " : ""}····{c} ({count})
                     </button>
                   );
                 })}
+                <button
+                  onClick={() => setActiveCards(new Set(cardBuckets))}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs"
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setActiveCards(new Set())}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs"
+                >
+                  None
+                </button>
               </div>
               <div className="space-y-1">
                 {cardBuckets.map((c) => (
@@ -445,13 +465,13 @@ export function StatementUploader({
                   onClick={selectVisible}
                   className="text-zinc-600 dark:text-zinc-300 hover:underline"
                 >
-                  Select all on this card
+                  Select all visible
                 </button>
                 <button
                   onClick={unselectVisible}
                   className="text-zinc-600 dark:text-zinc-300 hover:underline"
                 >
-                  Unselect all on this card
+                  Unselect all visible
                 </button>
               </div>
             </div>
