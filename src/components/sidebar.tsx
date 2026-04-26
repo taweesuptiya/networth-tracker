@@ -12,21 +12,48 @@ const items = [
   { href: "/accounts", label: "Accounts & rules" },
 ];
 
-export function Sidebar({ userEmail }: { userEmail: string | null }) {
+export function Sidebar({
+  userEmail,
+  isOpen = false,
+  onClose,
+}: {
+  userEmail: string | null;
+  isOpen?: boolean;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const params = useSearchParams();
   const ws = params.get("ws");
   const wsQuery = ws ? `?ws=${ws}` : "";
 
   return (
-    <aside className="w-60 shrink-0 border-r flex flex-col">
+    <aside
+      className={
+        "fixed inset-y-0 left-0 z-40 w-72 shrink-0 border-r flex flex-col bg-paper " +
+        "transition-transform duration-300 ease-in-out " +
+        (isOpen ? "translate-x-0" : "-translate-x-full") +
+        " md:relative md:w-60 md:translate-x-0 md:z-auto"
+      }
+    >
       <div className="px-6 pt-8 pb-6">
-        <Link href={`/${wsQuery}`} className="block">
-          <div className="display text-3xl leading-none">Ledger</div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-ink-subtle mt-2">
-            Net worth · projection · spend
-          </div>
-        </Link>
+        <div className="flex items-start justify-between">
+          <Link href={`/${wsQuery}`} className="block" onClick={onClose}>
+            <div className="display text-3xl leading-none">Ledger</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-ink-subtle mt-2">
+              Net worth · projection · spend
+            </div>
+          </Link>
+          {/* Close button — mobile only */}
+          <button
+            className="md:hidden text-ink-faint hover:text-ink p-1 -mr-1 mt-0.5 shrink-0"
+            onClick={onClose}
+            aria-label="Close menu"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
         {userEmail && (
           <div className="mt-4 text-[11px] text-ink-faint truncate font-mono" title={userEmail}>
             {userEmail}
@@ -45,11 +72,10 @@ export function Sidebar({ userEmail }: { userEmail: string | null }) {
             <Link
               key={item.href}
               href={`${item.href}${wsQuery}`}
+              onClick={onClose}
               className={
                 "group flex items-center gap-3 px-3 py-2 text-sm transition-colors " +
-                (active
-                  ? "text-ink"
-                  : "text-ink-subtle hover:text-ink")
+                (active ? "text-ink" : "text-ink-subtle hover:text-ink")
               }
             >
               <span

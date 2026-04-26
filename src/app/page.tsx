@@ -184,7 +184,7 @@ export default async function Home({
 
   return (
     <AppShell userEmail={user.email ?? null}>
-      <header className="px-10 pt-10 pb-6 border-b">
+      <header className="px-4 pt-6 pb-4 md:px-10 md:pt-10 md:pb-6 border-b">
         <div className="flex items-baseline gap-4 mb-2">
           <span className="text-[11px] uppercase tracking-[0.2em] text-ink-faint font-mono">
             {dateString}
@@ -193,11 +193,11 @@ export default async function Home({
             № 01 · Dashboard
           </span>
         </div>
-        <div className="flex items-end justify-between gap-6">
-          <h1 className="display text-5xl leading-[1.05]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-6">
+          <h1 className="display text-4xl md:text-5xl leading-[1.05]">
             Net Worth, <span className="text-oxblood">{active.name.toLowerCase()}</span>
           </h1>
-          <div className="flex items-center gap-4 pb-1">
+          <div className="flex items-center gap-3 md:gap-4 md:pb-1">
             <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
             <RefreshButton workspaceId={active.id} />
             <FxEditor workspaceId={active.id} initial={usdToThb} />
@@ -205,7 +205,7 @@ export default async function Home({
         </div>
       </header>
 
-      <main className="flex-1 px-10 py-8 max-w-7xl w-full mx-auto stagger">
+      <main className="flex-1 px-4 py-4 md:px-10 md:py-8 max-w-7xl w-full mx-auto stagger">
         {/* TOP ROW: Hero NW card + 3 monthly metric cards */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
           <div className="lg:col-span-5 card-hero rounded-2xl p-6 flex flex-col justify-between min-h-[180px]">
