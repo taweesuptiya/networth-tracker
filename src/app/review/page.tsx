@@ -168,17 +168,17 @@ export default async function ReviewPage({
 
   return (
     <AppShell userEmail={user.email ?? null}>
-      <header className="px-10 pt-10 pb-6 border-b">
+      <header className="px-4 pt-6 pb-4 md:px-10 md:pt-10 md:pb-6 border-b">
         <div className="flex items-baseline gap-4 mb-2">
           <span className="text-[11px] uppercase tracking-[0.2em] text-ink-faint font-mono">
             № 06 · Monthly Review
           </span>
         </div>
-        <div className="flex items-end justify-between gap-6">
-          <h1 className="display text-5xl leading-[1.05]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-6">
+          <h1 className="display text-4xl md:text-5xl leading-[1.05]">
             How the months <span className="italic text-oxblood">moved</span>.
           </h1>
-          <div className="flex items-center gap-3 pb-1">
+          <div className="flex items-center gap-3 md:pb-1">
             <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
             <span className="text-xs text-ink-faint font-mono">
               today: {fmt(currentTotal)} {baseCurrency}
@@ -194,7 +194,7 @@ export default async function ReviewPage({
         </div>
       </header>
 
-      <main className="flex-1 px-10 py-10 max-w-6xl w-full mx-auto stagger">
+      <main className="flex-1 px-4 py-4 md:px-10 md:py-10 max-w-6xl w-full mx-auto stagger">
         {months.length === 0 ? (
           <p className="text-ink-subtle">
             No transactions or budget yet. Upload a statement to start.
