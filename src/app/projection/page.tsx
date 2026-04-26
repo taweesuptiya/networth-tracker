@@ -30,6 +30,30 @@ export default async function ProjectionPage({
 
   const config = await loadProjectionConfig(active.id);
 
+  // Per-asset monthly snapshots (from backfill) → group by asset for the asset breakdown view
+  const { data: massRows } = await supabase
+    .from("monthly_asset_snapshots")
+    .select("month, value, asset_id")
+    .eq("workspace_id", active.id);
+  const { data: assetMeta } = await supabase
+    .from("assets")
+    .select("id, name, type")
+    .eq("workspace_id", active.id);
+  const assetNameById = new Map((assetMeta ?? []).map((a) => [a.id as string, a.name as string]));
+  const assetTypeById = new Map((assetMeta ?? []).map((a) => [a.id as string, a.type as string]));
+  // map: assetName -> month -> value
+  const assetMonthValues = new Map<string, Map<string, number>>();
+  for (const r of massRows ?? []) {
+    const name = assetNameById.get(r.asset_id as string) ?? "Unknown";
+    const m = String(r.month).slice(0, 7);
+    let inner = assetMonthValues.get(name);
+    if (!inner) {
+      inner = new Map();
+      assetMonthValues.set(name, inner);
+    }
+    inner.set(m, (inner.get(m) ?? 0) + Number(r.value));
+  }
+
   const { data: budgetRows } = await supabase
     .from("monthly_budgets")
     .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget, expense_lines")
@@ -104,6 +128,16 @@ export default async function ProjectionPage({
           actuals={actuals}
           savedBudgets={savedBudgets}
           startingNetworth={startingNetworth}
+          assetMonthValues={Object.fromEntries(
+            Array.from(assetMonthValues.entries()).map(([name, inner]) => [
+              name,
+              {
+                type: Array.from(assetMeta ?? [])
+                  .find((a) => a.name === name)?.type ?? "Other",
+                values: Object.fromEntries(inner),
+              },
+            ])
+          )}
         />
       </main>
     </AppShell>

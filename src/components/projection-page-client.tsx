@@ -7,12 +7,18 @@ import { ProjectionTable, type SavedBudget } from "./projection-table";
 import { NetworthChart, CashFlowChart } from "./projection-charts";
 import { saveAsBudget, clearBudget } from "@/app/actions/projection";
 
+export type AssetMonthValues = Record<
+  string,
+  { type: string; values: Record<string, number> }
+>;
+
 export function ProjectionPageClient({
   workspaceId,
   initialConfig,
   actuals,
   savedBudgets,
   startingNetworth,
+  assetMonthValues,
 }: {
   workspaceId: string;
   initialConfig: ProjectionConfig;
@@ -26,6 +32,7 @@ export function ProjectionPageClient({
   }[];
   savedBudgets: SavedBudget[];
   startingNetworth: number;
+  assetMonthValues: AssetMonthValues;
 }) {
   const [cfg, setCfg] = useState<ProjectionConfig>(initialConfig);
   const [budgets, setBudgets] = useState<SavedBudget[]>(savedBudgets);
@@ -124,6 +131,7 @@ export function ProjectionPageClient({
         savedBudgets={budgets}
         workspaceId={workspaceId}
         actualSavingByMonth={Object.fromEntries(actualSavingByMonth)}
+        assetMonthValues={assetMonthValues}
       />
     </>
   );

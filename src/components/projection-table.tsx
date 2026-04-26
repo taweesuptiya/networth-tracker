@@ -48,15 +48,18 @@ export function ProjectionTable({
   savedBudgets,
   workspaceId,
   actualSavingByMonth,
+  assetMonthValues,
 }: {
   rows: MonthRow[];
   actuals: ActualMonth[];
   savedBudgets: SavedBudget[];
   workspaceId: string;
   actualSavingByMonth: Record<string, number>;
+  assetMonthValues: Record<string, { type: string; values: Record<string, number> }>;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [expandExpenses, setExpandExpenses] = useState(false);
+  const [expandAssets, setExpandAssets] = useState(false);
   const visible = showAll ? rows : rows.slice(0, 12);
 
   const actualMap = new Map(actuals.map((a) => [a.month, a]));
@@ -225,7 +228,11 @@ export function ProjectionTable({
               percent
             />
 
-            <Section label="ASSET BALANCES (forecast end of month)" />
+            <SectionToggle
+              label="ASSET BALANCES"
+              expanded={expandAssets}
+              onToggle={() => setExpandAssets((v) => !v)}
+            />
             <Row label="Saving (forecast)" values={visible.map((r) => r.saving_balance)} />
             <Row
               label="↳ Saving (actual, from income−expense)"
@@ -258,6 +265,46 @@ export function ProjectionTable({
               )}
               muted
             />
+
+            {expandAssets && Object.keys(assetMonthValues).length > 0 && (
+              <>
+                <tr className="bg-paper-darker">
+                  <td
+                    colSpan={1000}
+                    className="px-3 py-1 text-[10px] uppercase tracking-wide text-ink-faint sticky left-0 pl-6"
+                  >
+                    Per-asset monthly value (actual, from backfilled snapshots)
+                  </td>
+                </tr>
+                {Object.entries(assetMonthValues)
+                  .sort((a, b) => {
+                    // Sort by type then name
+                    if (a[1].type !== b[1].type) return a[1].type.localeCompare(b[1].type);
+                    return a[0].localeCompare(b[0]);
+                  })
+                  .map(([name, info]) => {
+                    const monthVals = visible.map((r) => info.values[r.month] ?? 0);
+                    // Compute month-over-month change as supplementary line for clarity
+                    const changeVals = monthVals.map((v, i) => {
+                      if (i === 0) return 0;
+                      const prev = monthVals[i - 1];
+                      if (prev === 0 || v === 0) return 0;
+                      return v - prev;
+                    });
+                    const hasAnyValue = monthVals.some((v) => v > 0);
+                    if (!hasAnyValue) return null;
+                    return (
+                      <PerAssetGroup
+                        key={name}
+                        name={name}
+                        type={info.type}
+                        values={monthVals}
+                        change={changeVals}
+                      />
+                    );
+                  })}
+              </>
+            )}
           </tbody>
         </table>
       </div>
@@ -297,6 +344,37 @@ function SectionToggle({
         {expanded ? "▾" : "▸"} {label} {expanded ? "(per category)" : "— click to expand"}
       </td>
     </tr>
+  );
+}
+
+function PerAssetGroup({
+  name,
+  type,
+  values,
+  change,
+}: {
+  name: string;
+  type: string;
+  values: number[];
+  change: number[];
+}) {
+  return (
+    <>
+      <tr className="border-t border-zinc-200 dark:border-zinc-800">
+        <td className="px-3 py-1.5 sticky left-0 bg-paper whitespace-nowrap pl-8">
+          <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-2 font-mono">
+            {type.slice(0, 5)}
+          </span>
+          {name}
+        </td>
+        {values.map((v, i) => (
+          <td key={i} className="px-3 py-1.5 text-right whitespace-nowrap font-mono">
+            {v === 0 ? "—" : fmt(v)}
+          </td>
+        ))}
+      </tr>
+      <Row label="↳ M/M change" values={change} muted variance />
+    </>
   );
 }
 
