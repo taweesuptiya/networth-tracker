@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createRule, deleteRule, seedDefaultRules } from "@/app/actions/accounts";
 import type { Rule } from "@/lib/tx-rules";
 
@@ -24,6 +25,7 @@ export function RulesManager({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState<"contains" | "regex">("contains");
   const [accountType, setAccountType] = useState<Rule["applies_to_account_type"]>("all");
@@ -50,6 +52,7 @@ export function RulesManager({
       else {
         setPattern("");
         setSetCategory("");
+        router.refresh();
       }
     });
   }
@@ -58,6 +61,7 @@ export function RulesManager({
     if (!confirm("Delete this rule?")) return;
     startTransition(async () => {
       await deleteRule(id);
+      router.refresh();
     });
   }
 
@@ -65,6 +69,7 @@ export function RulesManager({
     if (!confirm("Add the starter rule pack? (You can edit/delete any of them after.)")) return;
     startTransition(async () => {
       await seedDefaultRules(workspaceId);
+      router.refresh();
     });
   }
 
