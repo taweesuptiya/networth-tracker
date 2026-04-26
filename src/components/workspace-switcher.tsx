@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 type Workspace = { id: string; name: string };
 
@@ -13,6 +13,7 @@ export function WorkspaceSwitcher({
 }) {
   const router = useRouter();
   const params = useSearchParams();
+  const pathname = usePathname();
 
   return (
     <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5">
@@ -24,7 +25,7 @@ export function WorkspaceSwitcher({
             onClick={() => {
               const next = new URLSearchParams(params);
               next.set("ws", w.id);
-              router.push(`/?${next.toString()}`);
+              router.push(`${pathname}?${next.toString()}`);
             }}
             className={
               "px-3 py-1 text-xs rounded-md transition-colors " +
