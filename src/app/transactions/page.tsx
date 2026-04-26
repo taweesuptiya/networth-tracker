@@ -39,10 +39,13 @@ export default async function TransactionsPage({
     amount: Number(t.amount),
   })) as Tx[];
 
+  // Load all accounts across workspaces so the name lookup works for any
+  // account_id, including cross-workspace transfer_in rows and statements
+  // uploaded to this workspace but linked to an account in another workspace.
   const { data: accountRows } = await supabase
     .from("accounts")
-    .select("id, name, type")
-    .eq("workspace_id", active.id);
+    .select("id, name, type, workspace_id")
+    .order("name");
   const accounts: AccountRef[] = accountRows ?? [];
 
   const projectionConfig = await loadProjectionConfig(active.id);

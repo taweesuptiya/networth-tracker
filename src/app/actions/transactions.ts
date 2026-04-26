@@ -137,7 +137,7 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
           direction: "credit",
           category: t.category ?? null,
           tx_type: "transfer_in",
-          account_id: null,
+          account_id: t.account_id ?? null, // preserve source account so Marriage can see "from KBANK"
           linked_tx_id: sourceId,
         })
         .select("id")

@@ -20,7 +20,7 @@ export type Tx = {
   account_id: string | null;
 };
 
-export type AccountRef = { id: string; name: string; type: string };
+export type AccountRef = { id: string; name: string; type: string; workspace_id?: string };
 
 const TX_TYPES = [
   "auto",
