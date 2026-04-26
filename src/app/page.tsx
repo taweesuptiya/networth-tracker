@@ -205,41 +205,84 @@ export default async function Home({
         </div>
       </header>
 
-      <main className="flex-1 px-10 py-10 max-w-7xl w-full mx-auto stagger">
-        {/* Top stats grid — 4 columns */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-0 rule-bottom pb-8 mb-8">
-          <MetricCard
-            label="Total net worth"
-            value={fmt(total)}
-            unit={baseCurrency}
-            isPrimary
-          />
-          <MetricCard
-            label={`${monthLabel} · Income`}
-            value={thisIncome > 0 ? `+${fmt(thisIncome)}` : "—"}
-            unit={baseCurrency}
-            tone={thisIncome > 0 ? "jade" : undefined}
-          />
-          <MetricCard
-            label={`${monthLabel} · Expenses`}
-            value={thisExpense > 0 ? `−${fmt(thisExpense)}` : "—"}
-            unit={baseCurrency}
-            tone={thisExpense > 0 ? "oxblood" : undefined}
-          />
-          <MetricCard
-            label={`${monthLabel} · Net flow`}
-            value={
-              thisNet === 0
-                ? "—"
-                : `${thisNet >= 0 ? "+" : "−"}${fmt(Math.abs(thisNet))}`
-            }
-            unit={baseCurrency}
-            tone={thisNet >= 0 ? "jade" : "oxblood"}
-          />
+      <main className="flex-1 px-10 py-8 max-w-7xl w-full mx-auto stagger">
+        {/* TOP ROW: Hero NW card + 3 monthly metric cards */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
+          <div className="lg:col-span-5 card-hero rounded-2xl p-6 flex flex-col justify-between min-h-[180px]">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+                Total net worth · {active.name}
+              </p>
+              <span className="text-[10px] uppercase tracking-[0.18em] font-mono text-ink-faint">
+                {dateString.split(" ").slice(0, 2).join(" ")}
+              </span>
+            </div>
+            <div className="mt-2">
+              <p className="metric text-6xl">{fmt(total)}</p>
+              <p className="text-xs text-ink-subtle mt-2 font-mono">{baseCurrency}</p>
+            </div>
+            <div className="flex items-end justify-between gap-3 mt-2 pt-3 border-t border-ink/10">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-ink-faint">
+                  Cost basis
+                </p>
+                <p className="font-mono text-base mt-0.5">
+                  {totalCost > 0 ? fmt(totalCost) : "—"}
+                </p>
+              </div>
+              {totalGain != null && (
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-wider text-ink-faint">
+                    Unrealized
+                  </p>
+                  <p
+                    className={`font-mono text-base mt-0.5 ${
+                      totalGain >= 0 ? "text-jade-bright" : "text-oxblood-bright"
+                    }`}
+                  >
+                    {totalGain >= 0 ? "+" : "−"}
+                    {fmt(Math.abs(totalGain))}{" "}
+                    <span className="text-xs">
+                      ({totalGainPct! >= 0 ? "+" : ""}
+                      {totalGainPct!.toFixed(1)}%)
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <PillCard
+              label={`${monthLabel}`}
+              sub="Income"
+              value={thisIncome > 0 ? `+${fmt(thisIncome)}` : "—"}
+              unit={baseCurrency}
+              tone={thisIncome > 0 ? "jade" : undefined}
+            />
+            <PillCard
+              label={`${monthLabel}`}
+              sub="Expenses"
+              value={thisExpense > 0 ? `−${fmt(thisExpense)}` : "—"}
+              unit={baseCurrency}
+              tone={thisExpense > 0 ? "oxblood" : undefined}
+            />
+            <PillCard
+              label={`${monthLabel}`}
+              sub="Net flow"
+              value={
+                thisNet === 0
+                  ? "—"
+                  : `${thisNet >= 0 ? "+" : "−"}${fmt(Math.abs(thisNet))}`
+              }
+              unit={baseCurrency}
+              tone={thisNet >= 0 ? "jade" : "oxblood"}
+            />
+          </div>
         </section>
 
-        {/* Net worth chart + Allocation pie row */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* MIDDLE ROW: Charts (2/3) + Allocation (1/3) */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
           <div className="lg:col-span-2">
             <DashboardCharts
               rows={rows}
@@ -248,58 +291,33 @@ export default async function Home({
               actualNetworth={actualNetworth}
             />
           </div>
-          <div>
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 mb-6">
-              <h2 className="display italic text-base mb-3">Allocation</h2>
-              <AllocationChart data={allocation} baseCurrency={baseCurrency} />
+          <div className="card-surface rounded-2xl p-5">
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="display italic text-lg leading-none">Allocation</h2>
+              <span className="text-[10px] uppercase tracking-wider text-ink-faint">
+                by type
+              </span>
             </div>
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5">
-              <h2 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
-                Cost basis
-              </h2>
-              <p className="metric text-3xl text-ink-subtle">
-                {totalCost > 0 ? fmt(totalCost) : "—"}
-              </p>
-              {totalCost > 0 && (
-                <p className="text-xs text-ink-faint mt-1 font-mono">{baseCurrency}</p>
-              )}
-              {totalGain != null && (
-                <>
-                  <h2 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mt-4 mb-2">
-                    Unrealized gain
-                  </h2>
-                  <p
-                    className={`metric text-3xl ${
-                      totalGain >= 0 ? "text-jade-bright" : "text-oxblood-bright"
-                    }`}
-                  >
-                    {totalGain >= 0 ? "+" : "−"}
-                    {fmt(Math.abs(totalGain))}
-                  </p>
-                  <p
-                    className={`text-sm font-mono mt-1 ${
-                      totalGain >= 0 ? "text-jade-bright" : "text-oxblood-bright"
-                    }`}
-                  >
-                    {totalGainPct! >= 0 ? "+" : ""}
-                    {totalGainPct!.toFixed(2)}%
-                  </p>
-                </>
-              )}
-            </div>
+            <AllocationChart data={allocation} baseCurrency={baseCurrency} />
           </div>
         </section>
 
+        {/* HOLDINGS */}
         <section>
-          <h2 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-4">
-            Holdings
-          </h2>
-          <AssetTable
-            workspaceId={active.id}
-            baseCurrency={baseCurrency}
-            usdToThb={usdToThb}
-            assets={assets}
-          />
+          <div className="flex items-baseline justify-between mb-3">
+            <h2 className="display italic text-xl leading-none">Holdings</h2>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+              {assets.length} assets
+            </span>
+          </div>
+          <div className="card-surface rounded-2xl overflow-hidden">
+            <AssetTable
+              workspaceId={active.id}
+              baseCurrency={baseCurrency}
+              usdToThb={usdToThb}
+              assets={assets}
+            />
+          </div>
         </section>
       </main>
     </AppShell>
@@ -310,18 +328,18 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
-function MetricCard({
+function PillCard({
   label,
+  sub,
   value,
   unit,
   tone,
-  isPrimary,
 }: {
   label: string;
+  sub: string;
   value: string;
   unit: string;
   tone?: "jade" | "oxblood";
-  isPrimary?: boolean;
 }) {
   const toneCls =
     tone === "jade"
@@ -330,14 +348,17 @@ function MetricCard({
         ? "text-oxblood-bright"
         : "";
   return (
-    <div className="px-6 py-4 border-r last:border-r-0">
-      <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-2">
-        {label}
-      </p>
-      <p className={"metric " + (isPrimary ? "text-5xl" : "text-3xl") + " " + toneCls}>
-        {value}
-      </p>
-      <p className="text-xs text-ink-faint mt-2 font-mono">{unit}</p>
+    <div className="card-surface rounded-2xl p-5 flex flex-col justify-between min-h-[180px]">
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+          {label}
+        </p>
+        <p className="text-[11px] text-ink-subtle mt-1 italic">{sub}</p>
+      </div>
+      <div className="mt-3">
+        <p className={"metric text-3xl " + toneCls}>{value}</p>
+        <p className="text-xs text-ink-faint mt-2 font-mono">{unit}</p>
+      </div>
     </div>
   );
 }

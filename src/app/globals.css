@@ -165,10 +165,30 @@ a, button.link-style {
   background: transparent !important;
 }
 
-/* Soften the rounded SaaS feel — ledger has crisp corners */
-.rounded-2xl { border-radius: 6px !important; }
-.rounded-xl  { border-radius: 4px !important; }
-.rounded-lg  { border-radius: 3px !important; }
+/* Card radius — slightly softer than crisp ledger, still architectural */
+.rounded-2xl { border-radius: 14px !important; }
+.rounded-xl  { border-radius: 10px !important; }
+.rounded-lg  { border-radius: 6px !important; }
+
+/* Soft card surface — sits above the page paper */
+.card-surface {
+  background: color-mix(in srgb, white 65%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 4%, transparent),
+              0 8px 24px -16px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  .card-surface {
+    background: color-mix(in srgb, white 4%, var(--paper));
+  }
+}
+
+.card-hero {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--oxblood) 8%, var(--paper)) 0%,
+    color-mix(in srgb, var(--mustard) 6%, var(--paper)) 100%);
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+}
 
 /* Accent recolor for green/red used by the app */
 .text-green-600 { color: var(--jade-bright) !important; }
