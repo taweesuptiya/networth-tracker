@@ -151,6 +151,7 @@ export function StatementUploader({
     try {
       const buf = await file.arrayBuffer();
       const fd = new FormData();
+      fd.append("workspace_id", workspaceId);
       const encrypted = await pdfHeaderHasEncrypt(buf);
       if (encrypted) {
         setProgress(`Decrypting with ${savedPasswords.length} saved password(s)...`);
