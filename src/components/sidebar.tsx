@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const items = [
   { href: "/", label: "Dashboard" },
+  { href: "/review", label: "Monthly review" },
   { href: "/projection", label: "Projection" },
   { href: "/transactions", label: "Transactions" },
   { href: "/statements", label: "Upload" },
