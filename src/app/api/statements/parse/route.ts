@@ -68,6 +68,21 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const extractedText = form.get("text");
     const file = form.get("file");
+    const workspaceId = form.get("workspace_id");
+
+    let userInstructions = "";
+    if (typeof workspaceId === "string" && workspaceId) {
+      const { data } = await supabase
+        .from("workspaces")
+        .select("ai_categorization_instructions")
+        .eq("id", workspaceId)
+        .maybeSingle();
+      userInstructions = (data?.ai_categorization_instructions as string | null) ?? "";
+    }
+    const userRules = userInstructions.trim()
+      ? "\n\nUser's specific categorization instructions (FOLLOW STRICTLY when applicable):\n" +
+        userInstructions.trim()
+      : "";
 
     let messageContent;
 
@@ -84,8 +99,9 @@ export async function POST(request: Request) {
             "Skip running balance entries — only actual transactions. " +
             "If the statement contains MULTIPLE credit cards (e.g. UOB combined statement listing several card numbers like '5265 32XX XXXX 5949' / '4033 75XX XXXX 5758'), " +
             "set card_last4 on each transaction to the last 4 digits of the card it belongs to. " +
-            "If only one card or it's a bank statement, leave card_last4 empty.\n\n" +
-            "=== STATEMENT TEXT ===\n" +
+            "If only one card or it's a bank statement, leave card_last4 empty." +
+            userRules +
+            "\n\n=== STATEMENT TEXT ===\n" +
             extractedText,
         },
       ];
@@ -106,7 +122,8 @@ export async function POST(request: Request) {
             "Extract all transactions from this bank or credit card statement. " +
             "Return as structured JSON. Dates ISO YYYY-MM-DD. Amounts positive; use direction. " +
             "Translate Thai descriptions to English where helpful but keep merchant names. " +
-            "Skip running balance entries.",
+            "Skip running balance entries." +
+            userRules,
         },
       ];
     } else {
