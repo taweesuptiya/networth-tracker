@@ -33,12 +33,29 @@ export async function loadProjectionConfig(workspaceId: string): Promise<AnyProj
   const stored = data?.config as AnyProjectionConfig | undefined;
   if (stored && Object.keys(stored).length > 0) {
     // If the stored config doesn't have a kind tag yet, infer from workspace name
-    const kindTagged = (stored as MarriageProjectionConfig).kind
-      ? stored
-      : isMarriageWorkspace
-        ? ({ ...stored, kind: "marriage" } as MarriageProjectionConfig)
-        : ({ ...stored, kind: "personal" } as ProjectionConfig);
-    return kindTagged;
+    if ((stored as MarriageProjectionConfig).kind === "marriage" || isMarriageWorkspace) {
+      // Merge with defaults so older configs missing income_lines/expense_lines still work
+      const defaults = defaultMarriageConfig();
+      const merged: MarriageProjectionConfig = {
+        ...defaults,
+        ...(stored as Partial<MarriageProjectionConfig>),
+        kind: "marriage",
+        starting: {
+          ...defaults.starting,
+          ...((stored as MarriageProjectionConfig).starting ?? {}),
+        },
+        growth: {
+          ...defaults.growth,
+          ...((stored as MarriageProjectionConfig).growth ?? {}),
+        },
+        income_lines:
+          (stored as MarriageProjectionConfig).income_lines ?? defaults.income_lines,
+        expense_lines:
+          (stored as MarriageProjectionConfig).expense_lines ?? defaults.expense_lines,
+      };
+      return merged;
+    }
+    return { ...stored, kind: "personal" } as ProjectionConfig;
   }
   return isMarriageWorkspace ? defaultMarriageConfig() : defaultConfig();
 }

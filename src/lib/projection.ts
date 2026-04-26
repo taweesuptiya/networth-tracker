@@ -182,8 +182,8 @@ export function categoriesByTxType(
 ): Record<string, string[]> {
   if ((config as MarriageProjectionConfig).kind === "marriage") {
     const m = config as MarriageProjectionConfig;
-    const expenseCats = m.expense_lines.map((e) => e.label);
-    const incomeCats = m.income_lines.map((e) => e.label);
+    const expenseCats = (m.expense_lines ?? []).map((e) => e.label);
+    const incomeCats = (m.income_lines ?? []).map((e) => e.label);
     return {
       expense: expenseCats,
       reimbursement: expenseCats,
@@ -257,13 +257,13 @@ export function projectMarriage(config: MarriageProjectionConfig): MarriageMonth
   const condoMonthly = (config.growth.condo_annual ?? 0) / 12;
 
   for (let i = 0; i < config.months; i++) {
-    const income_breakdown = config.income_lines.map((e) => ({
+    const income_breakdown = (config.income_lines ?? []).map((e) => ({
       label: e.label,
       amount: e.monthly + findScheduled(e.schedule ?? [], cur),
     }));
     const total_income = income_breakdown.reduce((s, e) => s + e.amount, 0);
 
-    const expense_breakdown = config.expense_lines.map((e) => ({
+    const expense_breakdown = (config.expense_lines ?? []).map((e) => ({
       label: e.label,
       amount: e.monthly + findScheduled(e.schedule ?? [], cur),
     }));
