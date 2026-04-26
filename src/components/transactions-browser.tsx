@@ -34,6 +34,9 @@ const TX_TYPES = [
 
 const PAGE_SIZE = 100;
 
+const fmt = (n: number) =>
+  Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
+
 export function TransactionsBrowser({
   txs,
   accounts,
@@ -58,6 +61,22 @@ export function TransactionsBrowser({
   const [from, setFrom] = useState<string>(sp.get("from") ?? "");
   const [to, setTo] = useState<string>(sp.get("to") ?? "");
 
+  // Sorting
+  type SortKey = "occurred_at" | "amount" | "description" | "category" | "tx_type";
+  const [sortKey, setSortKey] = useState<SortKey>("occurred_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else {
+      setSortKey(k);
+      setSortDir(k === "amount" ? "desc" : "asc");
+    }
+  }
+  function sortIndicator(k: SortKey) {
+    if (sortKey !== k) return "";
+    return sortDir === "asc" ? " ↑" : " ↓";
+  }
+
   // Selection + AI suggestion state
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkType, setBulkType] = useState<string>("");
@@ -68,7 +87,7 @@ export function TransactionsBrowser({
   const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    return txs.filter((t) => {
+    const result = txs.filter((t) => {
       if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
       if (accountId && t.account_id !== accountId) return false;
       if (txType && t.tx_type !== txType) return false;
@@ -78,7 +97,86 @@ export function TransactionsBrowser({
       if (to && t.occurred_at > to) return false;
       return true;
     });
-  }, [txs, search, accountId, txType, category, from, to]);
+    const dir = sortDir === "asc" ? 1 : -1;
+    result.sort((a, b) => {
+      let av: string | number = "";
+      let bv: string | number = "";
+      switch (sortKey) {
+        case "occurred_at":
+          av = a.occurred_at;
+          bv = b.occurred_at;
+          break;
+        case "amount":
+          av = Number(a.amount);
+          bv = Number(b.amount);
+          break;
+        case "description":
+          av = a.description.toLowerCase();
+          bv = b.description.toLowerCase();
+          break;
+        case "category":
+          av = (a.category ?? "").toLowerCase();
+          bv = (b.category ?? "").toLowerCase();
+          break;
+        case "tx_type":
+          av = a.tx_type;
+          bv = b.tx_type;
+          break;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    return result;
+  }, [txs, search, accountId, txType, category, from, to, sortKey, sortDir]);
+
+  // Summary stats for the filtered set (P&L-aware: nets reimbursements, ignores transfers/cc payments)
+  const summary = useMemo(() => {
+    let income = 0;
+    let grossExpense = 0;
+    let reimbursement = 0;
+    let transfer = 0;
+    let ccPayment = 0;
+    let creditTotal = 0;
+    let debitTotal = 0;
+    for (const t of filtered) {
+      const amt = Number(t.amount);
+      if (t.direction === "credit") creditTotal += amt;
+      else debitTotal += amt;
+      switch (t.tx_type) {
+        case "income":
+          income += amt;
+          break;
+        case "expense":
+          grossExpense += amt;
+          break;
+        case "reimbursement":
+          reimbursement += amt;
+          break;
+        case "transfer":
+          transfer += amt;
+          break;
+        case "cc_payment":
+        case "cc_payment_received":
+          ccPayment += amt;
+          break;
+      }
+    }
+    const netExpense = grossExpense - reimbursement;
+    const netSave = income - netExpense;
+    return {
+      count: filtered.length,
+      income,
+      grossExpense,
+      reimbursement,
+      netExpense,
+      netSave,
+      transfer,
+      ccPayment,
+      creditTotal,
+      debitTotal,
+    };
+  }, [filtered]);
 
   const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -495,6 +593,76 @@ export function TransactionsBrowser({
 
       {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
 
+      {/* Summary stats for filtered set */}
+      {filtered.length > 0 && (
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-3 overflow-hidden">
+          <div className="px-4 py-2 bg-paper-darker border-b text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+            Summary · {filtered.length} transaction{filtered.length === 1 ? "" : "s"}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 divide-x">
+            <div className="px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+                Income
+              </div>
+              <div className="font-mono tabular text-base text-jade-bright mt-1">
+                {summary.income > 0 ? `+${fmt(summary.income)}` : "—"}
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+                Expenses (gross)
+              </div>
+              <div className="font-mono tabular text-base text-oxblood-bright mt-1">
+                {summary.grossExpense > 0 ? `−${fmt(summary.grossExpense)}` : "—"}
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+                Reimbursements
+              </div>
+              <div className="font-mono tabular text-base text-jade-bright mt-1">
+                {summary.reimbursement > 0 ? `+${fmt(summary.reimbursement)}` : "—"}
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+                Net expense
+              </div>
+              <div className="font-mono tabular text-base mt-1">
+                {summary.netExpense !== 0
+                  ? `${summary.netExpense >= 0 ? "−" : "+"}${fmt(Math.abs(summary.netExpense))}`
+                  : "—"}
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+                Net flow
+              </div>
+              <div
+                className={
+                  "font-mono tabular text-base mt-1 " +
+                  (summary.netSave >= 0 ? "text-jade-bright" : "text-oxblood-bright")
+                }
+              >
+                {summary.netSave !== 0
+                  ? `${summary.netSave >= 0 ? "+" : "−"}${fmt(Math.abs(summary.netSave))}`
+                  : "—"}
+              </div>
+            </div>
+          </div>
+          {(summary.transfer > 0 || summary.ccPayment > 0) && (
+            <div className="px-4 py-2 border-t text-[11px] text-ink-faint flex flex-wrap gap-x-6 gap-y-1">
+              {summary.transfer > 0 && (
+                <span>Transfers: {fmt(summary.transfer)} (excluded from P&amp;L)</span>
+              )}
+              {summary.ccPayment > 0 && (
+                <span>CC payments: {fmt(summary.ccPayment)} (excluded from P&amp;L)</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-3">
         <div className="flex justify-between items-center px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
@@ -541,12 +709,37 @@ export function TransactionsBrowser({
                     title={allOnPageSelected ? "Unselect page" : "Select page"}
                   />
                 </th>
-                <th className="px-3 py-2">Date</th>
+                <th
+                  className="px-3 py-2 cursor-pointer hover:text-ink select-none"
+                  onClick={() => toggleSort("occurred_at")}
+                >
+                  Date{sortIndicator("occurred_at")}
+                </th>
                 <th className="px-3 py-2">Account</th>
-                <th className="px-3 py-2">Description</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Category</th>
-                <th className="px-3 py-2 text-right">Amount</th>
+                <th
+                  className="px-3 py-2 cursor-pointer hover:text-ink select-none"
+                  onClick={() => toggleSort("description")}
+                >
+                  Description{sortIndicator("description")}
+                </th>
+                <th
+                  className="px-3 py-2 cursor-pointer hover:text-ink select-none"
+                  onClick={() => toggleSort("tx_type")}
+                >
+                  Type{sortIndicator("tx_type")}
+                </th>
+                <th
+                  className="px-3 py-2 cursor-pointer hover:text-ink select-none"
+                  onClick={() => toggleSort("category")}
+                >
+                  Category{sortIndicator("category")}
+                </th>
+                <th
+                  className="px-3 py-2 text-right cursor-pointer hover:text-ink select-none"
+                  onClick={() => toggleSort("amount")}
+                >
+                  Amount{sortIndicator("amount")}
+                </th>
               </tr>
             </thead>
             <tbody>
