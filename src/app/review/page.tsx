@@ -85,7 +85,24 @@ export default async function ReviewPage({
 
   // Projection forecast per month for the same months (for forecast comparison + asset change estimates)
   const config = await loadProjectionConfig(active.id);
-  const forecastRows = project(config);
+  const { isMarriageConfig, projectMarriage } = await import("@/lib/projection");
+  const forecastRows = isMarriageConfig(config)
+    ? projectMarriage(config).map((r) => ({
+        month: r.month,
+        total_income: r.total_income,
+        expenses: r.expenses,
+        expense_breakdown: r.expense_breakdown,
+        net_cash_save: r.net_cash_save,
+        total_networth: r.total_networth,
+      }))
+    : project(config).map((r) => ({
+        month: r.month,
+        total_income: r.total_income,
+        expenses: r.expenses,
+        expense_breakdown: r.expense_breakdown,
+        net_cash_save: r.net_cash_save,
+        total_networth: r.total_networth,
+      }));
   const forecastMap = new Map(forecastRows.map((r) => [r.month, r]));
 
   // Net worth snapshots — first/last per month for delta

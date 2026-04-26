@@ -37,10 +37,15 @@ const TX_TYPES = [
   "income",
   "expense",
   "transfer",
+  "transfer_in",
+  "asset_buy",
   "cc_payment",
   "cc_payment_received",
   "reimbursement",
 ] as const;
+
+type WorkspaceRef = { id: string; name: string };
+type AssetRef = { id: string; name: string; type: string };
 
 async function loadPdfjs() {
   const pdfjs = await import("pdfjs-dist");
@@ -98,12 +103,14 @@ export function StatementUploader({
   accounts,
   rules,
   categoriesByType,
+  assets,
 }: {
-  workspaces: { id: string; name: string }[];
+  workspaces: WorkspaceRef[];
   savedPasswords: SavedPassword[];
   accounts: Account[];
   rules: Rule[];
   categoriesByType: Record<string, string[]>;
+  assets: AssetRef[];
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -113,6 +120,10 @@ export function StatementUploader({
   const [committing, startCommit] = useTransition();
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [classified, setClassified] = useState<ClassifiedTx[]>([]);
+  // Per-row destination state for transfer/asset_buy
+  const [targetWs, setTargetWs] = useState<Record<number, string>>({});
+  const [targetAsset, setTargetAsset] = useState<Record<number, string>>({});
+  const [unitsDelta, setUnitsDelta] = useState<Record<number, string>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
@@ -260,10 +271,10 @@ export function StatementUploader({
   function onCommit() {
     if (!parsed || !workspaceId || !selectedAccount) return;
     const txs: CommitTx[] = classified
-      .filter((_, i) => selected.has(i))
-      .map((t) => {
+      .map((t, i) => ({ t, i }))
+      .filter(({ i }) => selected.has(i))
+      .map(({ t, i }) => {
         const card = (t as ClassifiedTx & { card_last4?: string }).card_last4;
-        // For multi-card statements: route each tx to the per-card account.
         const accForTx =
           isMultiCard && card && cardAccountMap[card]
             ? cardAccountMap[card]
@@ -277,6 +288,14 @@ export function StatementUploader({
           category: t.category ?? null,
           tx_type: t.tx_type,
           account_id: accForTx,
+          target_workspace_id:
+            t.tx_type === "transfer" && targetWs[i] ? targetWs[i] : null,
+          target_asset_id:
+            t.tx_type === "asset_buy" && targetAsset[i] ? targetAsset[i] : null,
+          units_delta:
+            t.tx_type === "asset_buy" && unitsDelta[i]
+              ? Number(unitsDelta[i])
+              : null,
         };
       });
     if (txs.length === 0) return;
@@ -576,6 +595,58 @@ export function StatementUploader({
                         placeholder="pick or type new"
                         className="w-36 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-1 py-0.5"
                       />
+                      {t.tx_type === "transfer" && (
+                        <select
+                          value={targetWs[i] ?? ""}
+                          onChange={(e) =>
+                            setTargetWs({ ...targetWs, [i]: e.target.value })
+                          }
+                          className="ml-1 rounded border bg-transparent px-1 py-0.5"
+                          title="Target workspace (creates paired credit row there)"
+                        >
+                          <option value="">→ within workspace</option>
+                          {workspaces
+                            .filter((w) => w.id !== workspaceId)
+                            .map((w) => (
+                              <option key={w.id} value={w.id}>
+                                → {w.name}
+                              </option>
+                            ))}
+                        </select>
+                      )}
+                      {t.tx_type === "asset_buy" && (
+                        <span className="ml-1 inline-flex gap-1">
+                          <select
+                            value={targetAsset[i] ?? ""}
+                            onChange={(e) =>
+                              setTargetAsset({ ...targetAsset, [i]: e.target.value })
+                            }
+                            className="rounded border bg-transparent px-1 py-0.5"
+                            title="Asset bought"
+                          >
+                            <option value="">— pick asset —</option>
+                            {assets
+                              .filter((a) =>
+                                ["Stock", "Fund", "Crypto"].includes(a.type)
+                              )
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                          </select>
+                          <input
+                            type="number"
+                            step="any"
+                            value={unitsDelta[i] ?? ""}
+                            onChange={(e) =>
+                              setUnitsDelta({ ...unitsDelta, [i]: e.target.value })
+                            }
+                            placeholder="units"
+                            className="w-20 rounded border bg-transparent px-1 py-0.5 font-mono text-right"
+                          />
+                        </span>
+                      )}
                     </td>
                     <td
                       className={`px-3 py-2 text-right whitespace-nowrap ${

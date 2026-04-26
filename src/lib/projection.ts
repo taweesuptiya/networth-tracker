@@ -10,6 +10,7 @@ export type ExpenseLine = {
 };
 
 export type ProjectionConfig = {
+  kind?: "personal";
   start_month: string; // "2026-01"
   months: number;
   growth: {
@@ -176,18 +177,161 @@ export function project(config: ProjectionConfig): MonthRow[] {
 // Returns the canonical category list per tx_type, derived from the projection config.
 // Used to populate dropdowns in the statement uploader and transactions browser
 // so that categories stay consistent with the budget tracker.
-export function categoriesByTxType(config: ProjectionConfig): Record<string, string[]> {
-  const expenseCats = config.expenses.map((e) => e.label);
+export function categoriesByTxType(
+  config: ProjectionConfig | MarriageProjectionConfig
+): Record<string, string[]> {
+  if ((config as MarriageProjectionConfig).kind === "marriage") {
+    const m = config as MarriageProjectionConfig;
+    const expenseCats = m.expense_lines.map((e) => e.label);
+    const incomeCats = m.income_lines.map((e) => e.label);
+    return {
+      expense: expenseCats,
+      reimbursement: expenseCats,
+      income: incomeCats,
+      transfer: ["To Personal", "Asset buy", "Internal"],
+      transfer_in: incomeCats,
+      asset_buy: [],
+      cc_payment: ["UOB card", "Other CC"],
+      cc_payment_received: [],
+      auto: [...expenseCats, ...incomeCats],
+    };
+  }
+  const p = config as ProjectionConfig;
+  const expenseCats = p.expenses.map((e) => e.label);
   return {
     expense: expenseCats,
-    // Reimbursements offset an expense category, so they share the same list
     reimbursement: expenseCats,
     income: ["Salary", "RSU", "Bonus stock", "Bonus cash", "Interest/Dividend", "Other income"],
-    transfer: [],
+    transfer: ["To Marriage", "Asset buy", "Internal"],
+    transfer_in: ["From Marriage", "From Personal"],
+    asset_buy: [],
     cc_payment: ["KTC card", "UOB card", "Other CC"],
     cc_payment_received: [],
     auto: [...expenseCats, "Salary", "RSU", "Bonus stock", "Bonus cash", "Interest/Dividend"],
   };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Marriage projection — joint household savings, condo, no salary deductions
+// ───────────────────────────────────────────────────────────────────────────
+
+export type MarriageProjectionConfig = {
+  kind: "marriage";
+  start_month: string;
+  months: number;
+  starting: {
+    savings: number;
+    condo_value: number;
+    condo_loan: number;
+  };
+  growth: {
+    savings_annual: number;
+    condo_annual: number;
+  };
+  income_lines: ExpenseLine[]; // e.g. Transfer from Personal, Transfer from Jane, Rental
+  expense_lines: ExpenseLine[]; // Mortgage, Utilities, Household, Renovation
+};
+
+export type MarriageMonthRow = {
+  month: string;
+  total_income: number;
+  income_breakdown: { label: string; amount: number }[];
+  expenses: number;
+  expense_breakdown: { label: string; amount: number }[];
+  net_cash_save: number;
+  saving_balance: number;
+  condo_value: number;
+  condo_loan: number;
+  equity: number;
+  total_networth: number;
+};
+
+export function projectMarriage(config: MarriageProjectionConfig): MarriageMonthRow[] {
+  const rows: MarriageMonthRow[] = [];
+  let savings = config.starting.savings;
+  let condo = config.starting.condo_value;
+  const loan = config.starting.condo_loan;
+  let cur = config.start_month;
+
+  const savingsMonthly = (config.growth.savings_annual ?? 0) / 12;
+  const condoMonthly = (config.growth.condo_annual ?? 0) / 12;
+
+  for (let i = 0; i < config.months; i++) {
+    const income_breakdown = config.income_lines.map((e) => ({
+      label: e.label,
+      amount: e.monthly + findScheduled(e.schedule ?? [], cur),
+    }));
+    const total_income = income_breakdown.reduce((s, e) => s + e.amount, 0);
+
+    const expense_breakdown = config.expense_lines.map((e) => ({
+      label: e.label,
+      amount: e.monthly + findScheduled(e.schedule ?? [], cur),
+    }));
+    const expenses = expense_breakdown.reduce((s, e) => s + e.amount, 0);
+
+    const net_cash_save = total_income - expenses;
+    savings = savings * (1 + savingsMonthly) + net_cash_save;
+    condo = condo * (1 + condoMonthly);
+    const equity = condo - loan;
+    const total_networth = savings + equity;
+
+    rows.push({
+      month: cur,
+      total_income,
+      income_breakdown,
+      expenses,
+      expense_breakdown,
+      net_cash_save,
+      saving_balance: savings,
+      condo_value: condo,
+      condo_loan: loan,
+      equity,
+      total_networth,
+    });
+
+    cur = nextMonth(cur);
+  }
+  return rows;
+}
+
+export function defaultMarriageConfig(): MarriageProjectionConfig {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return {
+    kind: "marriage",
+    start_month: `${year}-${month}`,
+    months: 48,
+    starting: {
+      savings: 862114,
+      condo_value: 2909000,
+      condo_loan: 0,
+    },
+    growth: {
+      savings_annual: 0.01,
+      condo_annual: 0.03,
+    },
+    income_lines: [
+      { label: "Transfer from Personal", monthly: 30000 },
+      { label: "Transfer from Jane", monthly: 30000 },
+      { label: "Rental", monthly: 0, schedule: [] },
+      { label: "Other", monthly: 0 },
+    ],
+    expense_lines: [
+      { label: "Mortgage", monthly: 0 },
+      { label: "Utilities", monthly: 3500 },
+      { label: "Household", monthly: 5000 },
+      { label: "Joint dining", monthly: 4000 },
+      { label: "Renovation", monthly: 0, schedule: [] },
+      { label: "Misc", monthly: 2000 },
+    ],
+  };
+}
+
+export function isMarriageConfig(
+  c: ProjectionConfig | MarriageProjectionConfig
+): c is MarriageProjectionConfig {
+  return (c as MarriageProjectionConfig).kind === "marriage";
 }
 
 // Default config seeded from the user's Dec25 Excel projection

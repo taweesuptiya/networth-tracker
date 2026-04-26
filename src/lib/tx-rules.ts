@@ -7,7 +7,7 @@ export type Rule = {
   match_type: "contains" | "regex";
   applies_to_account_type: "all" | "savings" | "credit_card" | "cash";
   applies_to_direction: "all" | "credit" | "debit";
-  set_tx_type: "income" | "expense" | "transfer" | "cc_payment" | "cc_payment_received" | "reimbursement";
+  set_tx_type: "income" | "expense" | "transfer" | "transfer_in" | "asset_buy" | "cc_payment" | "cc_payment_received" | "reimbursement";
   set_category: string | null;
   enabled: boolean;
   min_amount?: number | null;
@@ -24,7 +24,15 @@ export type ParsedTx = {
 };
 
 export type ClassifiedTx = ParsedTx & {
-  tx_type: "income" | "expense" | "transfer" | "cc_payment" | "cc_payment_received" | "reimbursement";
+  tx_type:
+    | "income"
+    | "expense"
+    | "transfer"
+    | "transfer_in"
+    | "asset_buy"
+    | "cc_payment"
+    | "cc_payment_received"
+    | "reimbursement";
   matched_rule_id: string | null;
 };
 
@@ -227,6 +235,12 @@ export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
         row.income += amt;
         row.income_excl_reimb += amt;
         break;
+      case "transfer_in":
+        // Paired credit on a Marriage workspace from Personal (or vice versa).
+        // Counts as income for the receiving workspace's P&L.
+        row.income += amt;
+        row.income_excl_reimb += amt;
+        break;
       case "expense":
         row.gross_expense_by_category.set(
           cat,
@@ -242,9 +256,11 @@ export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
         addNet(-amt);
         break;
       case "transfer":
+      case "asset_buy":
       case "cc_payment":
       case "cc_payment_received":
-        // Excluded from P&L
+        // Excluded from P&L (transfer = outgoing money to another bucket;
+        // asset_buy = reallocation between cash and investment)
         break;
       default:
         if (t.direction === "credit") {

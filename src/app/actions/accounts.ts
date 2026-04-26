@@ -34,7 +34,7 @@ export async function createRule(input: {
   match_type: "contains" | "regex";
   applies_to_account_type: "all" | "savings" | "credit_card" | "cash";
   applies_to_direction: "all" | "credit" | "debit";
-  set_tx_type: "income" | "expense" | "transfer" | "cc_payment" | "cc_payment_received" | "reimbursement";
+  set_tx_type: "income" | "expense" | "transfer" | "transfer_in" | "asset_buy" | "cc_payment" | "cc_payment_received" | "reimbursement";
   set_category: string | null;
 }) {
   const supabase = await createClient();

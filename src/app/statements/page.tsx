@@ -29,6 +29,12 @@ export default async function StatementsPage() {
     .select("id, name, type")
     .order("name");
 
+  // Assets across all workspaces (for asset_buy dropdown — typically RMF/Stock are in Personal)
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("id, name, type, workspace_id")
+    .order("name");
+
   const { data: ruleRows } = await supabase
     .from("tx_rules")
     .select("*")
@@ -66,6 +72,11 @@ export default async function StatementsPage() {
           accounts={accounts ?? []}
           rules={rules}
           categoriesByType={categoriesByType}
+          assets={(assets ?? []).map((a) => ({
+            id: a.id as string,
+            name: a.name as string,
+            type: a.type as string,
+          }))}
         />
 
         <div className="mt-10">

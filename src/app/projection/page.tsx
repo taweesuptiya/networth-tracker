@@ -4,7 +4,10 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AppShell } from "@/components/app-shell";
 import { loadProjectionConfig } from "@/app/actions/projection";
 import { ProjectionPageClient } from "@/components/projection-page-client";
+import { MarriageProjectionClient } from "@/components/marriage-projection-client";
 import type { SavedBudget } from "@/components/projection-table";
+import type { SavedBudgetMarriage } from "@/components/marriage-projection-client";
+import { isMarriageConfig, type ProjectionConfig } from "@/lib/projection";
 import { valueInBase } from "@/lib/money";
 
 export default async function ProjectionPage({
@@ -30,46 +33,7 @@ export default async function ProjectionPage({
 
   const config = await loadProjectionConfig(active.id);
 
-  // Per-asset monthly snapshots (from backfill) → group by asset for the asset breakdown view
-  const { data: massRows } = await supabase
-    .from("monthly_asset_snapshots")
-    .select("month, value, asset_id")
-    .eq("workspace_id", active.id);
-  const { data: assetMeta } = await supabase
-    .from("assets")
-    .select("id, name, type")
-    .eq("workspace_id", active.id);
-  const assetNameById = new Map((assetMeta ?? []).map((a) => [a.id as string, a.name as string]));
-  const assetTypeById = new Map((assetMeta ?? []).map((a) => [a.id as string, a.type as string]));
-  // map: assetName -> month -> value
-  const assetMonthValues = new Map<string, Map<string, number>>();
-  for (const r of massRows ?? []) {
-    const name = assetNameById.get(r.asset_id as string) ?? "Unknown";
-    const m = String(r.month).slice(0, 7);
-    let inner = assetMonthValues.get(name);
-    if (!inner) {
-      inner = new Map();
-      assetMonthValues.set(name, inner);
-    }
-    inner.set(m, (inner.get(m) ?? 0) + Number(r.value));
-  }
-
-  const { data: budgetRows } = await supabase
-    .from("monthly_budgets")
-    .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget, expense_lines")
-    .eq("workspace_id", active.id)
-    .order("month");
-  const savedBudgets: SavedBudget[] = (budgetRows ?? []).map((b) => ({
-    month: String(b.month).slice(0, 7),
-    income_budget: Number(b.income_budget),
-    expense_budget: Number(b.expense_budget),
-    net_save_budget: Number(b.net_save_budget),
-    total_networth_budget: Number(b.total_networth_budget),
-    expense_lines: (b.expense_lines ?? []) as { label: string; amount: number }[],
-  }));
-
-  // Aggregate transactions by month for actuals overlay (excludes transfers/cc_payments,
-  // nets reimbursements against expenses).
+  // Aggregate transactions by month for actuals overlay
   const { data: txs } = await supabase
     .from("transactions")
     .select("occurred_at, amount, direction, tx_type, category")
@@ -85,16 +49,13 @@ export default async function ProjectionPage({
       category: t.category as string | null,
     }))
   );
-  const actuals = monthly.map((m) => ({
-    month: m.month,
-    income: m.income,
-    expense: m.expense,
-    expense_by_category: Object.fromEntries(m.expense_by_category),
-    gross_expense_by_category: Object.fromEntries(m.gross_expense_by_category),
-    reimbursement_by_category: Object.fromEntries(m.reimbursement_by_category),
-  }));
 
-  // Starting net worth = current asset total in base currency
+  const { data: budgetRows } = await supabase
+    .from("monthly_budgets")
+    .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget, expense_lines")
+    .eq("workspace_id", active.id)
+    .order("month");
+
   const { data: assetsData } = await supabase
     .from("assets")
     .select("units, price_per_unit, manual_value, currency")
@@ -105,26 +66,107 @@ export default async function ProjectionPage({
     0
   );
 
+  const headerStarting = (
+    <div className="text-xs text-zinc-500">
+      Starting net worth:{" "}
+      {Math.round(startingNetworth).toLocaleString("en-US", {
+        maximumFractionDigits: 0,
+      })}{" "}
+      {active.base_currency}
+    </div>
+  );
+
+  // Marriage flow — separate, lighter projection page
+  if (isMarriageConfig(config)) {
+    const actuals = monthly.map((m) => ({
+      month: m.month,
+      income: m.income,
+      expense: m.expense,
+      expense_by_category: Object.fromEntries(m.expense_by_category),
+    }));
+    const savedBudgets: SavedBudgetMarriage[] = (budgetRows ?? []).map((b) => ({
+      month: String(b.month).slice(0, 7),
+      income_budget: Number(b.income_budget),
+      expense_budget: Number(b.expense_budget),
+      net_save_budget: Number(b.net_save_budget),
+      total_networth_budget: Number(b.total_networth_budget),
+    }));
+
+    return (
+      <AppShell userEmail={user.email ?? null}>
+        <header className="flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-4">
+            <h1 className="display text-lg">Marriage projection</h1>
+            <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
+          </div>
+          {headerStarting}
+        </header>
+        <main className="flex-1 px-6 py-8 max-w-7xl w-full mx-auto">
+          <MarriageProjectionClient
+            workspaceId={active.id}
+            initialConfig={config}
+            actuals={actuals}
+            savedBudgets={savedBudgets}
+          />
+        </main>
+      </AppShell>
+    );
+  }
+
+  // Personal flow — existing rich projection
+  const { data: massRows } = await supabase
+    .from("monthly_asset_snapshots")
+    .select("month, value, asset_id")
+    .eq("workspace_id", active.id);
+  const { data: assetMeta } = await supabase
+    .from("assets")
+    .select("id, name, type")
+    .eq("workspace_id", active.id);
+  const assetNameById = new Map((assetMeta ?? []).map((a) => [a.id as string, a.name as string]));
+  const assetMonthValues = new Map<string, Map<string, number>>();
+  for (const r of massRows ?? []) {
+    const name = assetNameById.get(r.asset_id as string) ?? "Unknown";
+    const m = String(r.month).slice(0, 7);
+    let inner = assetMonthValues.get(name);
+    if (!inner) {
+      inner = new Map();
+      assetMonthValues.set(name, inner);
+    }
+    inner.set(m, (inner.get(m) ?? 0) + Number(r.value));
+  }
+
+  const savedBudgets: SavedBudget[] = (budgetRows ?? []).map((b) => ({
+    month: String(b.month).slice(0, 7),
+    income_budget: Number(b.income_budget),
+    expense_budget: Number(b.expense_budget),
+    net_save_budget: Number(b.net_save_budget),
+    total_networth_budget: Number(b.total_networth_budget),
+    expense_lines: (b.expense_lines ?? []) as { label: string; amount: number }[],
+  }));
+
+  const actuals = monthly.map((m) => ({
+    month: m.month,
+    income: m.income,
+    expense: m.expense,
+    expense_by_category: Object.fromEntries(m.expense_by_category),
+    gross_expense_by_category: Object.fromEntries(m.gross_expense_by_category),
+    reimbursement_by_category: Object.fromEntries(m.reimbursement_by_category),
+  }));
+
   return (
     <AppShell userEmail={user.email ?? null}>
-      <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
+      <header className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Net worth projection</h1>
+          <h1 className="display text-lg">Net worth projection</h1>
           <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
         </div>
-        <div className="text-xs text-zinc-500">
-          Starting net worth:{" "}
-          {Math.round(startingNetworth).toLocaleString("en-US", {
-            maximumFractionDigits: 0,
-          })}{" "}
-          {active.base_currency}
-        </div>
+        {headerStarting}
       </header>
 
       <main className="flex-1 px-6 py-8 max-w-7xl w-full mx-auto">
         <ProjectionPageClient
           workspaceId={active.id}
-          initialConfig={config}
+          initialConfig={config as ProjectionConfig}
           actuals={actuals}
           savedBudgets={savedBudgets}
           startingNetworth={startingNetworth}

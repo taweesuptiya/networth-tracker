@@ -10,7 +10,7 @@ import { DashboardCharts } from "@/components/dashboard-charts";
 import type { SavedBudget } from "@/components/projection-table";
 import { valueInBase, convertCurrency, formatMoney } from "@/lib/money";
 import { loadProjectionConfig } from "@/app/actions/projection";
-import { project } from "@/lib/projection";
+import { project, projectMarriage, isMarriageConfig, type MonthRow } from "@/lib/projection";
 import { aggregateMonthly } from "@/lib/tx-rules";
 
 export default async function Home({
@@ -76,7 +76,35 @@ export default async function Home({
 
   // Charts data: projection rows + actuals + saved budgets
   const config = await loadProjectionConfig(active.id);
-  const rows = project(config);
+  // Adapt Marriage rows into the MonthRow shape the dashboard chart expects
+  // (only the fields actually consumed by NetworthChart / MonthlyBreakdownChart matter here)
+  const rows: MonthRow[] = isMarriageConfig(config)
+    ? projectMarriage(config).map((r) => ({
+        month: r.month,
+        salary: 0,
+        rsu: 0,
+        bonus_stock: 0,
+        bonus_cash: 0,
+        total_income: r.total_income,
+        sso: 0,
+        provident: 0,
+        employer: 0,
+        tax: 0,
+        rmf_esg: 0,
+        net_pay: r.total_income,
+        expenses: r.expenses,
+        expense_breakdown: r.expense_breakdown,
+        net_cash_save: r.net_cash_save,
+        net_stock_save: 0,
+        saving_balance: r.saving_balance,
+        stock_balance: 0,
+        pvd_balance: 0,
+        ssf_rmf_balance: 0,
+        marriage_balance: r.equity, // condo equity for marriage
+        total_networth: r.total_networth,
+        saving_rate: r.total_income > 0 ? r.net_cash_save / r.total_income : 0,
+      }))
+    : project(config);
 
   const { data: txs } = await supabase
     .from("transactions")
