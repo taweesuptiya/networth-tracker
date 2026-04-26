@@ -11,7 +11,6 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import type { TooltipProps } from "recharts";
 import type { MonthRow } from "@/lib/projection";
 
 const fmt = (n: number) =>
@@ -172,9 +171,11 @@ export function MonthlyBreakdownChart({
             <YAxis tick={{ fontSize: 10 }} tickFormatter={fmt} />
             <ReferenceLine y={0} stroke="#00000033" />
             <Tooltip
-              content={(props) => (
+              content={(props: { active?: boolean; payload?: Array<{ payload: Record<string, number | string | null> }>; label?: string }) => (
                 <BreakdownTooltip
-                  {...props}
+                  active={props.active}
+                  payload={props.payload}
+                  label={props.label}
                   topCats={topCats}
                   colorMap={colorMap}
                 />
@@ -227,7 +228,10 @@ function BreakdownTooltip({
   label,
   topCats,
   colorMap,
-}: TooltipProps<number, string> & {
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: Record<string, number | string | null> }>;
+  label?: string;
   topCats: string[];
   colorMap: Map<string, string>;
 }) {
