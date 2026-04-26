@@ -83,6 +83,8 @@ export default async function ProjectionPage({
       income: m.income,
       expense: m.expense,
       expense_by_category: Object.fromEntries(m.expense_by_category),
+      gross_expense_by_category: Object.fromEntries(m.gross_expense_by_category),
+      reimbursement_by_category: Object.fromEntries(m.reimbursement_by_category),
     }));
     const savedBudgets: SavedBudgetMarriage[] = (budgetRows ?? []).map((b) => ({
       month: String(b.month).slice(0, 7),
@@ -90,6 +92,7 @@ export default async function ProjectionPage({
       expense_budget: Number(b.expense_budget),
       net_save_budget: Number(b.net_save_budget),
       total_networth_budget: Number(b.total_networth_budget),
+      expense_lines: (b.expense_lines ?? []) as { label: string; amount: number }[],
     }));
 
     return (

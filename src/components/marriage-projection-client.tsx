@@ -2,10 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   defaultMarriageConfig,
   projectMarriage,
   type MarriageProjectionConfig,
+  type MarriageMonthRow,
   type ExpenseLine,
   type ScheduleEntry,
 } from "@/lib/projection";
@@ -19,6 +21,8 @@ type ActualMonth = {
   income: number;
   expense: number;
   expense_by_category?: Record<string, number>;
+  gross_expense_by_category?: Record<string, number>;
+  reimbursement_by_category?: Record<string, number>;
 };
 
 export type SavedBudgetMarriage = {
@@ -27,9 +31,28 @@ export type SavedBudgetMarriage = {
   expense_budget: number;
   net_save_budget: number;
   total_networth_budget: number;
+  expense_lines?: { label: string; amount: number }[];
 };
 
-// ── shared sub-components (same style as ProjectionSettings) ──────────────
+// ── helpers ───────────────────────────────────────────────────────────────
+
+function monthRange(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  const from = `${y}-${String(m).padStart(2, "0")}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const to = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
+
+function txLink(workspaceId: string, month: string, opts: { category?: string; tx_type?: string }) {
+  const { from, to } = monthRange(month);
+  const params = new URLSearchParams({ ws: workspaceId, from, to });
+  if (opts.category) params.set("category", opts.category);
+  if (opts.tx_type) params.set("tx_type", opts.tx_type);
+  return `/transactions?${params.toString()}`;
+}
+
+// ── settings sub-components ───────────────────────────────────────────────
 
 function NumInput({
   value,
@@ -119,6 +142,388 @@ function ScheduleEditor({
   );
 }
 
+// ── table sub-components (same as projection-table.tsx) ───────────────────
+
+function Section({ label }: { label: string }) {
+  return (
+    <tr className="bg-zinc-100 dark:bg-zinc-800/50">
+      <td
+        colSpan={1000}
+        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0"
+      >
+        {label}
+      </td>
+    </tr>
+  );
+}
+
+function SectionToggle({
+  label,
+  expanded,
+  onToggle,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <tr className="bg-zinc-100 dark:bg-zinc-800/50">
+      <td
+        colSpan={1000}
+        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100"
+        onClick={onToggle}
+      >
+        {expanded ? "▾" : "▸"} {label} {expanded ? "(per category)" : "— click to expand"}
+      </td>
+    </tr>
+  );
+}
+
+function Row({
+  label,
+  values,
+  bold,
+  muted,
+  highlight,
+  percent,
+  variance,
+  positiveIsGood,
+  linkBuilder,
+}: {
+  label: string;
+  values: number[];
+  bold?: boolean;
+  muted?: boolean;
+  highlight?: boolean;
+  percent?: boolean;
+  variance?: boolean;
+  positiveIsGood?: boolean;
+  linkBuilder?: (value: number, index: number) => string;
+}) {
+  return (
+    <tr
+      className={
+        "border-t border-zinc-200 dark:border-zinc-800 " +
+        (highlight ? "bg-blue-50 dark:bg-blue-950/30 " : "") +
+        (muted ? "text-zinc-500 " : "") +
+        (bold ? "font-medium " : "")
+      }
+    >
+      <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap">
+        {label}
+      </td>
+      {values.map((v, i) => {
+        let cls = "px-3 py-1.5 text-right whitespace-nowrap ";
+        if (variance) {
+          if (v > 0) cls += positiveIsGood ? "text-green-600 " : "text-red-500 ";
+          else if (v < 0) cls += positiveIsGood ? "text-red-500 " : "text-green-600 ";
+        }
+        const display = percent
+          ? `${v.toFixed(1)}%`
+          : v === 0
+            ? "—"
+            : (variance && v > 0 ? "+" : "") + fmt(v);
+        const inner =
+          linkBuilder && v !== 0 ? (
+            <Link
+              href={linkBuilder(v, i)}
+              prefetch={false}
+              className="hover:underline hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              {display}
+            </Link>
+          ) : (
+            display
+          );
+        return (
+          <td key={i} className={cls}>
+            {inner}
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+function CategoryGroup({
+  label,
+  forecast,
+  budget,
+  gross,
+  reimbursement,
+  actual,
+  variance,
+  linkBuilder,
+  reimbLinkBuilder,
+}: {
+  label: string;
+  forecast: number[];
+  budget: number[];
+  gross: number[];
+  reimbursement: number[];
+  actual: number[];
+  variance: number[];
+  linkBuilder: (value: number, index: number) => string;
+  reimbLinkBuilder: (value: number, index: number) => string;
+}) {
+  const pctOfBudget = actual.map((a, i) => (budget[i] > 0 ? (a / budget[i]) * 100 : 0));
+  const hasReimb = reimbursement.some((v) => v > 0);
+  return (
+    <>
+      <tr className="border-t border-zinc-200 dark:border-zinc-800">
+        <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap font-medium pl-6">
+          {label}
+        </td>
+        {forecast.map((v, i) => (
+          <td key={i} className="px-3 py-1.5 text-right whitespace-nowrap">
+            {v === 0 ? "—" : fmt(v)}
+          </td>
+        ))}
+      </tr>
+      <Row label="↳ Budget" values={budget} muted />
+      {hasReimb && (
+        <>
+          <Row label="↳ Gross spend" values={gross} muted linkBuilder={linkBuilder} />
+          <Row
+            label="↳ Reimbursements"
+            values={reimbursement.map((v) => -v)}
+            muted
+            linkBuilder={reimbLinkBuilder}
+          />
+        </>
+      )}
+      <Row label="↳ Net actual" values={actual} muted linkBuilder={linkBuilder} />
+      <Row label="↳ % of budget" values={pctOfBudget} muted percent />
+      <Row label="↳ Variance" values={variance} muted variance />
+    </>
+  );
+}
+
+// ── marriage projection table ─────────────────────────────────────────────
+
+function MarriageProjectionTable({
+  rows,
+  actuals,
+  savedBudgets,
+  workspaceId,
+}: {
+  rows: MarriageMonthRow[];
+  actuals: ActualMonth[];
+  savedBudgets: SavedBudgetMarriage[];
+  workspaceId: string;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [expandExpenses, setExpandExpenses] = useState(false);
+  const [expandAssets, setExpandAssets] = useState(false);
+  const visible = showAll ? rows : rows.slice(0, 12);
+
+  const actualMap = new Map(actuals.map((a) => [a.month, a]));
+  const budgetMap = new Map(savedBudgets.map((b) => [b.month, b]));
+
+  // Collect all expense category labels
+  const allCategories = new Set<string>();
+  for (const r of visible) for (const e of r.expense_breakdown) allCategories.add(e.label);
+  for (const b of savedBudgets) for (const l of b.expense_lines ?? []) allCategories.add(l.label);
+  for (const a of actuals)
+    if (a.expense_by_category) for (const k of Object.keys(a.expense_by_category)) allCategories.add(k);
+  const categories = Array.from(allCategories).sort();
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-6">
+      <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+        <h2 className="text-sm font-medium text-zinc-500">Forecast vs Budget vs Actual</h2>
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        >
+          {showAll ? "Show first 12" : `Show all ${rows.length}`}
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500">
+            <tr>
+              <th className="px-3 py-2 sticky left-0 bg-zinc-50 dark:bg-zinc-900 z-10">Line</th>
+              {visible.map((r) => (
+                <th key={r.month} className="px-3 py-2 text-right whitespace-nowrap">
+                  {r.month}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* ── INCOME ── */}
+            <Section label="INCOME" />
+            <Row label="Forecast" values={visible.map((r) => r.total_income)} bold />
+            <Row
+              label="↳ Budget"
+              values={visible.map((r) => budgetMap.get(r.month)?.income_budget ?? 0)}
+              muted
+            />
+            <Row
+              label="↳ Actual"
+              values={visible.map((r) => actualMap.get(r.month)?.income ?? 0)}
+              muted
+              linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { tx_type: "income" })}
+            />
+            <Row
+              label="↳ Variance (Actual − Budget)"
+              values={visible.map((r) => {
+                const b = budgetMap.get(r.month)?.income_budget ?? 0;
+                const a = actualMap.get(r.month)?.income ?? 0;
+                return b === 0 || a === 0 ? 0 : a - b;
+              })}
+              muted
+              variance
+              positiveIsGood
+            />
+
+            {/* ── EXPENSES ── */}
+            <SectionToggle
+              label="EXPENSES"
+              expanded={expandExpenses}
+              onToggle={() => setExpandExpenses((v) => !v)}
+            />
+            <Row label="Forecast" values={visible.map((r) => r.expenses)} bold />
+            <Row
+              label="↳ Budget"
+              values={visible.map((r) => budgetMap.get(r.month)?.expense_budget ?? 0)}
+              muted
+            />
+            <Row
+              label="↳ Actual"
+              values={visible.map((r) => actualMap.get(r.month)?.expense ?? 0)}
+              muted
+              linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { tx_type: "expense" })}
+            />
+            <Row
+              label="↳ Variance (Actual − Budget)"
+              values={visible.map((r) => {
+                const b = budgetMap.get(r.month)?.expense_budget ?? 0;
+                const a = actualMap.get(r.month)?.expense ?? 0;
+                return b === 0 || a === 0 ? 0 : a - b;
+              })}
+              muted
+              variance
+            />
+
+            {expandExpenses &&
+              categories.map((cat) => {
+                const forecastVals = visible.map(
+                  (r) => r.expense_breakdown.find((e) => e.label === cat)?.amount ?? 0
+                );
+                const budgetVals = visible.map(
+                  (r) =>
+                    budgetMap.get(r.month)?.expense_lines?.find((l) => l.label === cat)?.amount ?? 0
+                );
+                const grossVals = visible.map(
+                  (r) =>
+                    actualMap.get(r.month)?.gross_expense_by_category?.[cat] ??
+                    actualMap.get(r.month)?.expense_by_category?.[cat] ??
+                    0
+                );
+                const reimbVals = visible.map(
+                  (r) => actualMap.get(r.month)?.reimbursement_by_category?.[cat] ?? 0
+                );
+                const netVals = visible.map(
+                  (r) => actualMap.get(r.month)?.expense_by_category?.[cat] ?? 0
+                );
+                const varianceVals = forecastVals.map((_, i) => {
+                  const b = budgetVals[i];
+                  const a = netVals[i];
+                  return b === 0 || a === 0 ? 0 : a - b;
+                });
+                return (
+                  <CategoryGroup
+                    key={cat}
+                    label={cat}
+                    forecast={forecastVals}
+                    budget={budgetVals}
+                    gross={grossVals}
+                    reimbursement={reimbVals}
+                    actual={netVals}
+                    variance={varianceVals}
+                    linkBuilder={(_v, i) =>
+                      txLink(workspaceId, visible[i].month, { category: cat })
+                    }
+                    reimbLinkBuilder={(_v, i) =>
+                      txLink(workspaceId, visible[i].month, {
+                        category: cat,
+                        tx_type: "reimbursement",
+                      })
+                    }
+                  />
+                );
+              })}
+
+            {/* ── SAVINGS ── */}
+            <Section label="SAVINGS" />
+            <Row label="Net cash save (forecast)" values={visible.map((r) => r.net_cash_save)} bold />
+            <Row
+              label="↳ Budget"
+              values={visible.map((r) => budgetMap.get(r.month)?.net_save_budget ?? 0)}
+              muted
+            />
+            <Row
+              label="↳ Actual (Income − Expense)"
+              values={visible.map((r) => {
+                const a = actualMap.get(r.month);
+                return a ? a.income - a.expense : 0;
+              })}
+              muted
+            />
+
+            {/* ── ASSET BALANCES ── */}
+            <SectionToggle
+              label="ASSET BALANCES"
+              expanded={expandAssets}
+              onToggle={() => setExpandAssets((v) => !v)}
+            />
+            <Row label="Savings balance" values={visible.map((r) => r.saving_balance)} />
+            <Row label="Condo value" values={visible.map((r) => r.condo_value)} />
+            <Row label="Condo loan" values={visible.map((r) => r.condo_loan)} />
+            <Row label="Equity" values={visible.map((r) => r.equity)} />
+            <Row
+              label="TOTAL NETWORTH (forecast)"
+              values={visible.map((r) => r.total_networth)}
+              bold
+              highlight
+            />
+            <Row
+              label="↳ Budget snapshot"
+              values={visible.map((r) => budgetMap.get(r.month)?.total_networth_budget ?? 0)}
+              muted
+            />
+
+            {expandAssets && (
+              <>
+                <tr className="bg-zinc-100 dark:bg-zinc-800/50">
+                  <td
+                    colSpan={1000}
+                    className="px-3 py-1 text-[10px] uppercase tracking-wide text-zinc-500 sticky left-0 pl-6"
+                  >
+                    Asset breakdown
+                  </td>
+                </tr>
+                <Row
+                  label="  Savings"
+                  values={visible.map((r) => r.saving_balance)}
+                  muted
+                />
+                <Row
+                  label="  Condo equity (value − loan)"
+                  values={visible.map((r) => r.equity)}
+                  muted
+                />
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── main component ────────────────────────────────────────────────────────
 
 export function MarriageProjectionClient({
@@ -139,13 +544,8 @@ export function MarriageProjectionClient({
   const [budgets, setBudgets] = useState<SavedBudgetMarriage[]>(initialBudgets);
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
 
   const rows = useMemo(() => projectMarriage(cfg), [cfg]);
-  const visible = showAll ? rows : rows.slice(0, 12);
-
-  const actualMap = new Map(actuals.map((a) => [a.month, a]));
-  const budgetMap = new Map(budgets.map((b) => [b.month, b]));
 
   function update(fn: (c: MarriageProjectionConfig) => MarriageProjectionConfig) {
     setCfg((c) => fn(c));
@@ -204,6 +604,7 @@ export function MarriageProjectionClient({
             expense_budget: r.expenses,
             net_save_budget: r.net_cash_save,
             total_networth_budget: r.total_networth,
+            expense_lines: r.expense_breakdown,
           }))
         );
       }
@@ -225,7 +626,7 @@ export function MarriageProjectionClient({
 
   return (
     <>
-      {/* Budget actions bar — mirrors personal projection */}
+      {/* Budget actions bar */}
       <div className="flex flex-wrap items-center gap-3 mb-4 text-xs">
         <button
           onClick={onSaveBudget}
@@ -248,10 +649,14 @@ export function MarriageProjectionClient({
             ? `${budgets.length} months saved as budget — actuals from ${actuals.length} months of transactions`
             : "No saved budget yet — save the projection to lock it as your baseline"}
         </span>
-        {msg && <span className="text-zinc-700 dark:text-zinc-300">{msg}</span>}
+        {msg && (
+          <span className={msg.startsWith("Error") ? "text-red-500" : "text-zinc-700 dark:text-zinc-300"}>
+            {msg}
+          </span>
+        )}
       </div>
 
-      {/* Settings panel — collapsible, same style as ProjectionSettings */}
+      {/* Settings panel */}
       <details className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 mb-6" open>
         <summary className="cursor-pointer text-sm font-medium text-zinc-500">
           ⚙️ Marriage projection settings
@@ -414,7 +819,7 @@ export function MarriageProjectionClient({
             </button>
           </div>
 
-          {/* Save button — same position as Personal */}
+          {/* Save */}
           <div className="md:col-span-2 flex items-center gap-3 pt-2">
             <button
               onClick={onSave}
@@ -424,7 +829,11 @@ export function MarriageProjectionClient({
               {pending ? "Saving..." : "Save projection"}
             </button>
             {msg && (
-              <span className={msg.startsWith("Error") ? "text-red-500 text-xs" : "text-green-600 text-xs"}>
+              <span
+                className={
+                  msg.startsWith("Error") ? "text-red-500 text-xs" : "text-green-600 text-xs"
+                }
+              >
                 {msg}
               </span>
             )}
@@ -433,135 +842,12 @@ export function MarriageProjectionClient({
       </details>
 
       {/* Forecast / Budget / Actual table */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-6 overflow-hidden">
-        <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-          <h2 className="text-sm font-medium">Forecast vs Budget vs Actual</h2>
-          <button
-            onClick={() => setShowAll((v) => !v)}
-            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            {showAll ? "Show first 12" : `Show all ${rows.length}`}
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 sticky left-0 bg-zinc-50 dark:bg-zinc-900 z-10">Line</th>
-                {visible.map((r) => (
-                  <th key={r.month} className="px-3 py-2 text-right whitespace-nowrap">
-                    {r.month}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <Section label="INCOME" />
-              <Row label="Forecast" values={visible.map((r) => r.total_income)} bold />
-              <Row
-                label="↳ Budget"
-                values={visible.map((r) => budgetMap.get(r.month)?.income_budget ?? 0)}
-                muted
-              />
-              <Row
-                label="↳ Actual (transfers in + direct)"
-                values={visible.map((r) => actualMap.get(r.month)?.income ?? 0)}
-                muted
-              />
-
-              <Section label="EXPENSES" />
-              <Row label="Forecast" values={visible.map((r) => r.expenses)} bold />
-              <Row
-                label="↳ Budget"
-                values={visible.map((r) => budgetMap.get(r.month)?.expense_budget ?? 0)}
-                muted
-              />
-              <Row
-                label="↳ Actual"
-                values={visible.map((r) => actualMap.get(r.month)?.expense ?? 0)}
-                muted
-              />
-
-              <Section label="SAVINGS" />
-              <Row label="Net cash save" values={visible.map((r) => r.net_cash_save)} bold />
-              <Row
-                label="↳ Actual"
-                values={visible.map((r) => {
-                  const a = actualMap.get(r.month);
-                  return a ? a.income - a.expense : 0;
-                })}
-                muted
-              />
-
-              <Section label="ASSET BALANCES" />
-              <Row label="Savings" values={visible.map((r) => r.saving_balance)} />
-              <Row label="Condo value" values={visible.map((r) => r.condo_value)} />
-              <Row label="Condo loan" values={visible.map((r) => r.condo_loan)} />
-              <Row label="Equity" values={visible.map((r) => r.equity)} />
-              <Row
-                label="TOTAL NETWORTH"
-                values={visible.map((r) => r.total_networth)}
-                bold
-                highlight
-              />
-              <Row
-                label="↳ Budget snapshot"
-                values={visible.map(
-                  (r) => budgetMap.get(r.month)?.total_networth_budget ?? 0
-                )}
-                muted
-              />
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <MarriageProjectionTable
+        rows={rows}
+        actuals={actuals}
+        savedBudgets={budgets}
+        workspaceId={workspaceId}
+      />
     </>
-  );
-}
-
-function Section({ label }: { label: string }) {
-  return (
-    <tr className="bg-zinc-50 dark:bg-zinc-900">
-      <td
-        colSpan={1000}
-        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0"
-      >
-        {label}
-      </td>
-    </tr>
-  );
-}
-
-function Row({
-  label,
-  values,
-  bold,
-  muted,
-  highlight,
-}: {
-  label: string;
-  values: number[];
-  bold?: boolean;
-  muted?: boolean;
-  highlight?: boolean;
-}) {
-  return (
-    <tr
-      className={
-        "border-t border-zinc-200 dark:border-zinc-800 " +
-        (highlight ? "bg-zinc-50 dark:bg-zinc-900 " : "") +
-        (muted ? "text-zinc-400 dark:text-zinc-500 " : "") +
-        (bold ? "font-medium " : "")
-      }
-    >
-      <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap">
-        {label}
-      </td>
-      {values.map((v, i) => (
-        <td key={i} className="px-3 py-1.5 text-right whitespace-nowrap font-mono tabular-nums">
-          {v === 0 ? "—" : fmt(v)}
-        </td>
-      ))}
-    </tr>
   );
 }
