@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { BackfillButton } from "@/components/backfill-button";
 import { aggregateMonthly } from "@/lib/tx-rules";
 import { loadProjectionConfig } from "@/app/actions/projection";
 import { project } from "@/lib/projection";
@@ -102,6 +103,17 @@ export default async function ReviewPage({
     else cur.last = v;
   }
 
+  // Per-asset monthly snapshots — sum to get a precise per-month investment total
+  const { data: massRows } = await supabase
+    .from("monthly_asset_snapshots")
+    .select("month, value")
+    .eq("workspace_id", active.id);
+  const investmentByMonth = new Map<string, number>();
+  for (const r of massRows ?? []) {
+    const m = String(r.month).slice(0, 7);
+    investmentByMonth.set(m, (investmentByMonth.get(m) ?? 0) + Number(r.value));
+  }
+
   // Current assets — for "today" baseline reference
   const { data: assetsData } = await supabase
     .from("assets")
@@ -177,6 +189,9 @@ export default async function ReviewPage({
           Each card connects one month&apos;s spending to the asset balance change. Click any
           category or merchant to drill into the underlying transactions.
         </p>
+        <div className="mt-4">
+          <BackfillButton workspaceId={active.id} />
+        </div>
       </header>
 
       <main className="flex-1 px-10 py-10 max-w-6xl w-full mx-auto stagger">
@@ -208,12 +223,26 @@ export default async function ReviewPage({
               : [];
             const totalCatSpend = topCats.reduce((s, [, v]) => s + v, 0);
 
-            // Asset balance changes (estimates)
+            // Investment value (sum of per-asset month-end snapshots) — precise when backfilled
+            const investmentEnd = investmentByMonth.get(m);
+            const prevMonthIdx = months.indexOf(m) + 1; // months sorted desc; previous month is later in array
+            const prevM = months[prevMonthIdx];
+            const investmentStart = prevM ? investmentByMonth.get(prevM) : undefined;
+            const investmentChange =
+              investmentEnd != null && investmentStart != null
+                ? investmentEnd - investmentStart
+                : null;
+
+            // Asset balance changes
             const nwChange = snap ? snap.last - snap.first : null;
-            // Saving balance change = net cash save (precise)
             const savingChange = actualNet;
-            // Other asset change (Stock/PVD/SSF+RMF) = total NW change minus cash save
-            const otherAssetChange = nwChange != null ? nwChange - savingChange : null;
+            // Prefer precise investment change when available; fall back to derived value
+            const otherAssetChange =
+              investmentChange != null
+                ? investmentChange
+                : nwChange != null
+                  ? nwChange - savingChange
+                  : null;
 
             const { from, to } = monthRange(m);
             const txParams = (extra: Record<string, string>) => {
