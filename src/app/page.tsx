@@ -112,22 +112,56 @@ export default async function Home({
     expense_lines: (b.expense_lines ?? []) as { label: string; amount: number }[],
   }));
 
-  // Compute actual net worth trend (running cumulative cash flow from start)
+  // Compute actual net worth per month from per-asset snapshots (precise) when available;
+  // anchor today on currentTotal; for months without snapshots, walk back from today by
+  // subtracting subsequent cash flow as a fallback estimate.
+  const { data: massRows } = await supabase
+    .from("monthly_asset_snapshots")
+    .select("month, value")
+    .eq("workspace_id", active.id);
+  const investmentByMonth = new Map<string, number>();
+  for (const r of massRows ?? []) {
+    const m = String(r.month).slice(0, 7);
+    investmentByMonth.set(m, (investmentByMonth.get(m) ?? 0) + Number(r.value));
+  }
+
   const actualsByMonth = new Map(actuals.map((a) => [a.month, a]));
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
   const actualNetworth: { month: string; total: number }[] = [];
-  const cfgStart = config.starting as Record<string, number | undefined>;
-  const startingNw =
-    (cfgStart.savings ?? 0) +
-    (cfgStart.stock ?? 0) +
-    (cfgStart.pvd ?? 0) +
-    (cfgStart.ssf_rmf ?? 0) +
-    (cfgStart.marriage ?? 0);
-  let runningActual = startingNw;
+
+  // Walk months from oldest to newest among rows that have either a snapshot or actual cash flow
+  const monthsWithData = new Set<string>();
+  for (const m of investmentByMonth.keys()) monthsWithData.add(m);
+  for (const a of actuals) monthsWithData.add(a.month);
+  const sortedDataMonths = Array.from(monthsWithData).sort();
+
+  // For months that have monthly_asset_snapshots → use the snapshot total directly (it IS the NW for that month)
+  // For months without, fall back to walking from currentTotal backwards.
+  const todayNw = total;
+  // Build a quick map from snapshot months
+  const snapshotForMonth = (m: string) => investmentByMonth.get(m);
+
+  // First pass — record snapshot months precisely; use forecast row order for chart x-axis
   for (const r of rows) {
-    const a = actualsByMonth.get(r.month);
-    if (a) {
-      runningActual += a.income - a.expense;
-      actualNetworth.push({ month: r.month, total: runningActual });
+    const m = r.month;
+    const snap = snapshotForMonth(m);
+    const a = actualsByMonth.get(m);
+    if (m === currentMonthKey && todayNw > 0) {
+      actualNetworth.push({ month: m, total: todayNw });
+    } else if (snap != null && snap > 0) {
+      actualNetworth.push({ month: m, total: snap });
+    } else if (a) {
+      // No snapshot and not current: estimate from todayNw backwards by subtracting future cash flow
+      // (only works if we already have cumulative actuals — for forward months past today we skip)
+      if (m > currentMonthKey) continue;
+      let est = todayNw;
+      for (const f of sortedDataMonths) {
+        if (f > m) {
+          const af = actualsByMonth.get(f);
+          if (af) est -= af.income - af.expense;
+        }
+      }
+      actualNetworth.push({ month: m, total: est });
     }
   }
 
