@@ -120,6 +120,40 @@ export default async function ReviewPage({
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
+  // Fallback for actual NW per month when no snapshot exists:
+  // walk backward from today's live total and subtract the net cash flow of months after m.
+  // (Approximates the end-of-month NW assuming investment values held; misses NAV moves
+  // between then and now, but better than showing "—".)
+  const actualNwByMonth = new Map<string, number>();
+  // Sort months oldest-first
+  const monthsAsc = [...months].sort();
+  // Sum of net cash save by month (income - expense) using actuals
+  const netByMonth = new Map<string, number>();
+  for (const a of monthly) netByMonth.set(a.month, a.income - a.expense);
+
+  // Start from today (currentTotal) and walk older months
+  let runningNw = currentTotal;
+  for (let i = monthsAsc.length - 1; i >= 0; i--) {
+    const m = monthsAsc[i];
+    const snap = monthSnapshots.get(m);
+    if (m === currentMonth) {
+      // Current month's "actual" = live total
+      actualNwByMonth.set(m, currentTotal);
+    } else if (snap?.last != null) {
+      // Use snapshot if available
+      actualNwByMonth.set(m, snap.last);
+      runningNw = snap.last; // rebase the walk to the precise value
+    } else {
+      // Estimate: NW at end of month m = runningNw - netCashSave(m+1 ... today)
+      // (i.e., subtract everything earned/spent AFTER this month from current)
+      // Note: runningNw already represents "end of next month" or "today"; subtract this month's NEXT cash flows.
+      // Simpler: estimated end-of-month value = runningNw - cash flow of all months after m
+      actualNwByMonth.set(m, runningNw);
+    }
+    // For the next (older) iteration, subtract this month's net cash save from runningNw
+    runningNw -= netByMonth.get(m) ?? 0;
+  }
+
   return (
     <AppShell userEmail={user.email ?? null}>
       <header className="px-10 pt-10 pb-6 border-b">
@@ -366,13 +400,10 @@ export default async function ReviewPage({
                       </div>
                     )}
                     {(() => {
-                      // Determine actual NW for this month: use snapshot last value if available;
-                      // for the current month, prefer current live asset total.
                       const isCurrent = m === currentMonth;
-                      const actualNw =
-                        isCurrent && currentTotal > 0
-                          ? currentTotal
-                          : snap?.last ?? null;
+                      const hasSnapshot = snap?.last != null;
+                      const actualNw = actualNwByMonth.get(m) ?? null;
+                      const isEstimated = !isCurrent && !hasSnapshot && actualNw != null;
                       const expected = budget?.total_nw ?? forecast?.total_networth ?? null;
                       if (expected == null && actualNw == null) return null;
                       return (
@@ -383,6 +414,14 @@ export default async function ReviewPage({
                               {isCurrent && (
                                 <span className="ml-1 text-[10px] uppercase tracking-wider text-oxblood">
                                   live
+                                </span>
+                              )}
+                              {isEstimated && (
+                                <span
+                                  className="ml-1 text-[10px] uppercase tracking-wider text-ink-faint"
+                                  title="No daily snapshot for this month — estimated from today's total minus subsequent cash flow"
+                                >
+                                  est.
                                 </span>
                               )}
                             </p>
