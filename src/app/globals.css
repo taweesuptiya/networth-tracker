@@ -1,25 +1,29 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────
-   Net Worth Tracker — modernist Thai ledger aesthetic
-   Paper tones, oxblood + jade accents, editorial typography.
+   Net Worth Tracker — modern white SaaS aesthetic
+   Lavender background, white cards, Sora futuristic geometric.
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  /* paper */
-  --paper: #F4EFE3;
-  --paper-darker: #ECE6D6;
-  --ink: #0E1116;
-  --ink-subtle: #4D4F52;
-  --ink-faint: #8C8B85;
+  --paper: #F2F4FA;
+  --paper-darker: #E8ECF5;
+  --card: #FFFFFF;
+  --card-hover: #FAFBFE;
 
-  /* accents */
-  --oxblood: #7A1B2C;
-  --oxblood-bright: #9B2D3F;
-  --jade: #1F4A38;
-  --jade-bright: #2F7A5C;
-  --mustard: #C9A14E;
-  --rule: #1F2024;
+  --ink: #0F172A;
+  --ink-subtle: #475569;
+  --ink-faint: #94A3B8;
+
+  --accent: #0F172A;
+  --accent-bright: #1E293B;
+  --oxblood: #DC2626;
+  --oxblood-bright: #EF4444;
+  --jade: #059669;
+  --jade-bright: #10B981;
+  --mustard: #D97706;
+
+  --rule: #E2E8F0;
 
   --background: var(--paper);
   --foreground: var(--ink);
@@ -27,19 +31,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #161A1E;
-    --paper-darker: #1C2025;
-    --ink: #E8E2D4;
-    --ink-subtle: #B0AB9E;
-    --ink-faint: #7A7670;
-    --oxblood: #C7374C;
-    --oxblood-bright: #DC6378;
-    --jade: #6CA88E;
-    --jade-bright: #8DC4AB;
-    --mustard: #E0B95F;
-    --rule: #E8E2D4;
-    --background: var(--paper);
-    --foreground: var(--ink);
+    --paper: #0B0F1A;
+    --paper-darker: #0E1422;
+    --card: #131A2A;
+    --card-hover: #182238;
+    --ink: #E2E8F0;
+    --ink-subtle: #94A3B8;
+    --ink-faint: #64748B;
+    --accent: #E2E8F0;
+    --accent-bright: #FFFFFF;
+    --rule: #1E293B;
+    --jade: #34D399;
+    --jade-bright: #6EE7B7;
+    --oxblood: #F87171;
+    --oxblood-bright: #FCA5A5;
   }
 }
 
@@ -48,88 +53,88 @@
   --color-foreground: var(--foreground);
   --color-paper: var(--paper);
   --color-paper-darker: var(--paper-darker);
+  --color-card: var(--card);
   --color-ink: var(--ink);
   --color-ink-subtle: var(--ink-subtle);
   --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-bright: var(--accent-bright);
   --color-oxblood: var(--oxblood);
   --color-oxblood-bright: var(--oxblood-bright);
   --color-jade: var(--jade);
   --color-jade-bright: var(--jade-bright);
   --color-mustard: var(--mustard);
   --color-rule: var(--rule);
-  --font-serif: var(--font-display), Georgia, serif;
-  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-sans: var(--font-display), system-ui, sans-serif;
+  --font-display: var(--font-display), system-ui, sans-serif;
   --font-mono: var(--font-mono-stack), ui-monospace, monospace;
 }
 
 * {
-  border-color: color-mix(in srgb, var(--ink) 12%, transparent);
+  border-color: var(--rule);
 }
 
 html, body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-body), system-ui, sans-serif;
-  font-feature-settings: "kern", "liga", "ss01";
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-feature-settings: "kern", "ss01", "ss02";
+  letter-spacing: -0.005em;
 }
 
-/* Subtle graph-paper texture overlay on the page */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--ink) 4%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--ink) 4%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
-  z-index: 0;
-  mask-image: radial-gradient(ellipse at center, black 30%, transparent 90%);
-}
-
-body > * {
-  position: relative;
-  z-index: 1;
-}
-
-/* Tabular numerals everywhere — financial data demands aligned columns */
 table, .tabular {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum", "lnum";
 }
 
-/* Display headings get the italic serif treatment */
-.display, h1.display, .serif-italic {
-  font-family: var(--font-display), Georgia, serif;
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-}
-
-/* Number "card" style — used for key metrics */
-.metric {
-  font-family: var(--font-display), Georgia, serif;
-  font-weight: 400;
+.display {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 600;
   letter-spacing: -0.02em;
+  font-style: normal !important;
+}
+
+.display.italic, .serif-italic, .display .italic {
+  font-style: normal !important;
+}
+
+.metric {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 300;
+  letter-spacing: -0.04em;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Ledger rules (printed-report borders) */
-.rule-top { border-top: 1px solid var(--rule); }
-.rule-bottom { border-bottom: 1px solid var(--rule); }
-.rule-double-bottom {
-  border-bottom: 1px solid var(--rule);
-  box-shadow: 0 3px 0 -2px var(--rule);
+.card-surface {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent),
+    0 8px 24px -12px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
-/* Page-load stagger animation */
-@keyframes ledger-rise {
-  from { opacity: 0; transform: translateY(6px); }
+.card-hero {
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--ink) 6%, var(--card)) 0%, var(--card) 50%),
+    var(--card);
+  border: 1px solid var(--rule);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent),
+    0 8px 24px -12px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.rounded-2xl { border-radius: 18px !important; }
+.rounded-xl  { border-radius: 12px !important; }
+.rounded-lg  { border-radius: 8px !important; }
+
+@keyframes lift {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .stagger > * {
   opacity: 0;
-  animation: ledger-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation: lift 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
 }
 .stagger > *:nth-child(1)  { animation-delay: 0.00s; }
 .stagger > *:nth-child(2)  { animation-delay: 0.06s; }
@@ -141,61 +146,39 @@ table, .tabular {
 .stagger > *:nth-child(8)  { animation-delay: 0.42s; }
 .stagger > *:nth-child(9)  { animation-delay: 0.48s; }
 
-/* Soft underline reveal on links */
-a, button.link-style {
-  text-underline-offset: 3px;
-  text-decoration-thickness: 1px;
-}
-
-/* Override default Tailwind muted/border colors throughout the app
-   so the ledger palette propagates to existing components */
+/* Globally remap legacy tokens */
 .text-zinc-500 { color: var(--ink-subtle) !important; }
 .text-zinc-400 { color: var(--ink-faint) !important; }
 .text-zinc-900 { color: var(--ink) !important; }
-.text-zinc-100 { color: var(--paper) !important; }
+.text-zinc-100 { color: white !important; }
 .bg-zinc-50  { background: var(--paper-darker) !important; }
 .bg-zinc-900 { background: var(--ink) !important; }
 .bg-zinc-100 { background: var(--paper-darker) !important; }
-.border-zinc-200, .border-zinc-300, .border-zinc-700, .border-zinc-800 {
-  border-color: color-mix(in srgb, var(--ink) 14%, transparent) !important;
-}
 .dark\:bg-zinc-800,
 .dark\:bg-zinc-900,
 .dark\:bg-zinc-950 {
   background: transparent !important;
 }
-
-/* Card radius — slightly softer than crisp ledger, still architectural */
-.rounded-2xl { border-radius: 14px !important; }
-.rounded-xl  { border-radius: 10px !important; }
-.rounded-lg  { border-radius: 6px !important; }
-
-/* Soft card surface — sits above the page paper */
-.card-surface {
-  background: color-mix(in srgb, white 65%, var(--paper));
-  border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 4%, transparent),
-              0 8px 24px -16px color-mix(in srgb, var(--ink) 14%, transparent);
+.border-zinc-200, .border-zinc-300, .border-zinc-700, .border-zinc-800 {
+  border-color: var(--rule) !important;
 }
-@media (prefers-color-scheme: dark) {
-  .card-surface {
-    background: color-mix(in srgb, white 4%, var(--paper));
-  }
+.rounded-2xl[class*="border-"] {
+  background: var(--card);
 }
 
-.card-hero {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--oxblood) 8%, var(--paper)) 0%,
-    color-mix(in srgb, var(--mustard) 6%, var(--paper)) 100%);
-  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-}
+/* Recolor "oxblood" usages in legacy markup so they read as plain ink, not red headings */
+.text-oxblood { color: var(--ink) !important; }
 
-/* Accent recolor for green/red used by the app */
-.text-green-600 { color: var(--jade-bright) !important; }
-.text-red-500   { color: var(--oxblood-bright) !important; }
+.text-green-600 { color: var(--jade) !important; }
+.text-red-500   { color: var(--oxblood) !important; }
 .bg-green-600   { background: var(--jade) !important; }
-.bg-blue-600    { background: var(--ink) !important; }
-.text-blue-600, .text-blue-700 { color: var(--oxblood) !important; }
-.border-blue-500 { border-color: var(--oxblood) !important; }
-.bg-blue-50      { background: color-mix(in srgb, var(--mustard) 12%, var(--paper)) !important; }
-.dark\:bg-blue-950\/30 { background: color-mix(in srgb, var(--mustard) 12%, var(--paper)) !important; }
+.bg-blue-600    { background: var(--accent) !important; }
+.text-blue-600, .text-blue-700 { color: var(--accent) !important; }
+.border-blue-500 { border-color: var(--accent) !important; }
+.bg-blue-50      { background: var(--paper-darker) !important; }
+.dark\:bg-blue-950\/30 { background: var(--paper-darker) !important; }
+
+button.bg-zinc-900,
+button.dark\:bg-zinc-100 {
+  color: white !important;
+}

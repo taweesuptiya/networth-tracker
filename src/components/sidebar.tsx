@@ -29,21 +29,20 @@ export function Sidebar({
   return (
     <aside
       className={
-        "fixed inset-y-0 left-0 z-40 w-72 shrink-0 border-r flex flex-col bg-paper " +
+        "fixed inset-y-0 left-0 z-40 w-72 shrink-0 flex flex-col bg-paper py-4 px-3 " +
         "transition-transform duration-300 ease-in-out " +
         (isOpen ? "translate-x-0" : "-translate-x-full") +
-        " md:relative md:w-60 md:translate-x-0 md:z-auto"
+        " md:relative md:w-64 md:translate-x-0 md:z-auto"
       }
     >
-      <div className="px-6 pt-8 pb-6">
+      <div className="card-surface rounded-2xl p-5 mb-3">
         <div className="flex items-start justify-between">
           <Link href={`/${wsQuery}`} className="block" onClick={onClose}>
-            <div className="display text-3xl leading-none">Ledger</div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-ink-subtle mt-2">
-              Net worth · projection · spend
+            <div className="display text-2xl leading-none">Ledger</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mt-2">
+              Net worth · Spend
             </div>
           </Link>
-          {/* Close button — mobile only */}
           <button
             className="md:hidden text-ink-faint hover:text-ink p-1 -mr-1 mt-0.5 shrink-0"
             onClick={onClose}
@@ -61,47 +60,47 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="border-t" />
-
-      <nav className="flex-1 px-3 py-4">
-        {items.map((item, idx) => {
-          const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
-          return (
-            <Link
-              key={item.href}
-              href={`${item.href}${wsQuery}`}
-              onClick={onClose}
-              className={
-                "group flex items-center gap-3 px-3 py-2 text-sm transition-colors " +
-                (active ? "text-ink" : "text-ink-subtle hover:text-ink")
-              }
-            >
-              <span
+      <nav className="card-surface rounded-2xl flex-1 p-2 flex flex-col">
+        <div className="flex-1">
+          {items.map((item, idx) => {
+            const active =
+              pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={`${item.href}${wsQuery}`}
+                onClick={onClose}
                 className={
-                  "font-mono text-[10px] tabular-nums w-6 " +
-                  (active ? "text-oxblood" : "text-ink-faint")
+                  "group flex items-center gap-3 px-3 py-2.5 text-sm rounded-xl transition-colors mb-1 " +
+                  (active
+                    ? "bg-ink text-white"
+                    : "text-ink-subtle hover:text-ink hover:bg-paper-darker")
                 }
               >
-                {String(idx + 1).padStart(2, "0")}
-              </span>
-              <span className={active ? "italic font-serif text-base leading-none" : ""}>
-                {item.label}
-              </span>
-              {active && (
-                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-oxblood" />
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+                <span
+                  className={
+                    "font-mono text-[10px] tabular-nums w-6 " +
+                    (active ? "text-white/60" : "text-ink-faint")
+                  }
+                >
+                  {String(idx + 1).padStart(2, "0")}
+                </span>
+                <span className="font-medium">{item.label}</span>
+                {active && (
+                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/80" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
 
-      <form action="/auth/signout" method="post" className="px-6 py-4 border-t">
-        <button className="text-[11px] uppercase tracking-[0.18em] text-ink-faint hover:text-ink">
-          Sign out
-        </button>
-      </form>
+        <form action="/auth/signout" method="post" className="px-3 py-3 border-t mx-1 mt-2">
+          <button className="text-[11px] uppercase tracking-[0.18em] text-ink-faint hover:text-ink">
+            Sign out
+          </button>
+        </form>
+      </nav>
     </aside>
   );
 }
