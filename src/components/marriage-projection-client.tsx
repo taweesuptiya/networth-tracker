@@ -7,6 +7,7 @@ import {
   projectMarriage,
   type MarriageProjectionConfig,
   type ExpenseLine,
+  type ScheduleEntry,
 } from "@/lib/projection";
 import { saveProjectionConfig, saveAsBudget, clearBudget } from "@/app/actions/projection";
 
@@ -28,11 +29,103 @@ export type SavedBudgetMarriage = {
   total_networth_budget: number;
 };
 
+// ── shared sub-components (same style as ProjectionSettings) ──────────────
+
+function NumInput({
+  value,
+  onChange,
+  step = "any",
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  step?: string;
+}) {
+  return (
+    <input
+      type="number"
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1 text-xs w-32"
+    />
+  );
+}
+
+function ScheduleEditor({
+  label,
+  schedule,
+  onChange,
+}: {
+  label: string;
+  schedule: ScheduleEntry[];
+  onChange: (s: ScheduleEntry[]) => void;
+}) {
+  const [newMonth, setNewMonth] = useState("");
+  const [newAmount, setNewAmount] = useState(0);
+  return (
+    <div className="space-y-1 mt-1">
+      <div className="text-xs font-medium text-zinc-500">{label} — one-time schedule</div>
+      {schedule.map((s, i) => (
+        <div key={i} className="flex gap-2 text-xs items-center">
+          <input
+            type="month"
+            value={s.month}
+            onChange={(e) => {
+              const next = [...schedule];
+              next[i] = { ...next[i], month: e.target.value };
+              onChange(next);
+            }}
+            className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1"
+          />
+          <NumInput
+            value={s.amount}
+            onChange={(n) => {
+              const next = [...schedule];
+              next[i] = { ...next[i], amount: n };
+              onChange(next);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => onChange(schedule.filter((_, j) => j !== i))}
+            className="text-red-500 hover:text-red-600"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <div className="flex gap-2 text-xs items-center">
+        <input
+          type="month"
+          value={newMonth}
+          onChange={(e) => setNewMonth(e.target.value)}
+          className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1"
+        />
+        <NumInput value={newAmount} onChange={setNewAmount} />
+        <button
+          type="button"
+          onClick={() => {
+            if (!newMonth || newAmount === 0) return;
+            onChange([...schedule, { month: newMonth, amount: newAmount }]);
+            setNewMonth("");
+            setNewAmount(0);
+          }}
+          className="text-green-600 hover:text-green-700"
+        >
+          + Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── main component ────────────────────────────────────────────────────────
+
 export function MarriageProjectionClient({
   workspaceId,
   initialConfig,
   actuals,
-  savedBudgets,
+  savedBudgets: initialBudgets,
 }: {
   workspaceId: string;
   initialConfig: MarriageProjectionConfig | null;
@@ -43,6 +136,7 @@ export function MarriageProjectionClient({
   const [cfg, setCfg] = useState<MarriageProjectionConfig>(
     initialConfig ?? defaultMarriageConfig()
   );
+  const [budgets, setBudgets] = useState<SavedBudgetMarriage[]>(initialBudgets);
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -51,27 +145,11 @@ export function MarriageProjectionClient({
   const visible = showAll ? rows : rows.slice(0, 12);
 
   const actualMap = new Map(actuals.map((a) => [a.month, a]));
-  const budgetMap = new Map(savedBudgets.map((b) => [b.month, b]));
+  const budgetMap = new Map(budgets.map((b) => [b.month, b]));
 
-  function update<K extends keyof MarriageProjectionConfig>(
-    key: K,
-    value: MarriageProjectionConfig[K]
-  ) {
-    setCfg((c) => ({ ...c, [key]: value }));
-  }
-
-  function updateStarting<K extends keyof MarriageProjectionConfig["starting"]>(
-    k: K,
-    v: number
-  ) {
-    setCfg((c) => ({ ...c, starting: { ...c.starting, [k]: v } }));
-  }
-
-  function updateGrowth<K extends keyof MarriageProjectionConfig["growth"]>(
-    k: K,
-    v: number
-  ) {
-    setCfg((c) => ({ ...c, growth: { ...c.growth, [k]: v } }));
+  function update(fn: (c: MarriageProjectionConfig) => MarriageProjectionConfig) {
+    setCfg((c) => fn(c));
+    setMsg(null);
   }
 
   function updateLine(
@@ -79,20 +157,22 @@ export function MarriageProjectionClient({
     i: number,
     patch: Partial<ExpenseLine>
   ) {
-    setCfg((c) => {
+    update((c) => {
       const lines = [...c[section]];
       lines[i] = { ...lines[i], ...patch };
       return { ...c, [section]: lines };
     });
   }
+
   function addLine(section: "income_lines" | "expense_lines") {
-    setCfg((c) => ({
+    update((c) => ({
       ...c,
       [section]: [...c[section], { label: "New line", monthly: 0 }],
     }));
   }
+
   function removeLine(section: "income_lines" | "expense_lines", i: number) {
-    setCfg((c) => ({
+    update((c) => ({
       ...c,
       [section]: c[section].filter((_, j) => j !== i),
     }));
@@ -117,182 +197,257 @@ export function MarriageProjectionClient({
       if (res.error) setMsg(`Error: ${res.error}`);
       else {
         setMsg(`Saved ${res.count} months as budget ✓`);
-        router.refresh();
+        setBudgets(
+          rows.map((r) => ({
+            month: r.month,
+            income_budget: r.total_income,
+            expense_budget: r.expenses,
+            net_save_budget: r.net_cash_save,
+            total_networth_budget: r.total_networth,
+          }))
+        );
       }
     });
   }
 
   function onClearBudget() {
     if (!confirm("Clear the saved budget for this workspace?")) return;
+    setMsg(null);
     startTransition(async () => {
       const res = await clearBudget(workspaceId);
       if (res.error) setMsg(`Error: ${res.error}`);
       else {
         setMsg("Budget cleared");
-        router.refresh();
+        setBudgets([]);
       }
     });
   }
 
   return (
     <>
-      {/* Settings */}
-      <div className="card-surface rounded-2xl p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="display text-lg">Marriage projection settings</h2>
-          <div className="flex gap-2 text-xs">
-            <button
-              onClick={onSave}
-              disabled={pending}
-              className="px-3 py-1.5 rounded-lg bg-ink text-white disabled:opacity-50"
-            >
-              {pending ? "..." : "Save settings"}
-            </button>
-            <button
-              onClick={onSaveBudget}
-              disabled={pending}
-              className="px-3 py-1.5 rounded-lg bg-jade text-white disabled:opacity-50"
-            >
-              💾 Save as budget
-            </button>
-            {savedBudgets.length > 0 && (
-              <button
-                onClick={onClearBudget}
-                disabled={pending}
-                className="px-3 py-1.5 rounded-lg border text-oxblood"
-              >
-                Clear budget
-              </button>
-            )}
-          </div>
-        </div>
-        {msg && <p className="text-xs text-ink-subtle mb-3">{msg}</p>}
+      {/* Budget actions bar — mirrors personal projection */}
+      <div className="flex flex-wrap items-center gap-3 mb-4 text-xs">
+        <button
+          onClick={onSaveBudget}
+          disabled={pending}
+          className="px-3 py-1.5 rounded-lg bg-green-600 text-white disabled:opacity-50"
+        >
+          {pending ? "Saving..." : "💾 Save current projection as budget"}
+        </button>
+        {budgets.length > 0 && (
+          <button
+            onClick={onClearBudget}
+            disabled={pending}
+            className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-red-500"
+          >
+            Clear saved budget
+          </button>
+        )}
+        <span className="text-zinc-500">
+          {budgets.length > 0
+            ? `${budgets.length} months saved as budget — actuals from ${actuals.length} months of transactions`
+            : "No saved budget yet — save the projection to lock it as your baseline"}
+        </span>
+        {msg && <span className="text-zinc-700 dark:text-zinc-300">{msg}</span>}
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-          {/* Starting */}
-          <div>
-            <h3 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
-              Starting balances
-            </h3>
-            <NumberField
-              label="Savings"
-              value={cfg.starting.savings}
-              onChange={(v) => updateStarting("savings", v)}
-            />
-            <NumberField
-              label="Condo value"
-              value={cfg.starting.condo_value}
-              onChange={(v) => updateStarting("condo_value", v)}
-            />
-            <NumberField
-              label="Condo loan"
-              value={cfg.starting.condo_loan}
-              onChange={(v) => updateStarting("condo_loan", v)}
-            />
-          </div>
+      {/* Settings panel — collapsible, same style as ProjectionSettings */}
+      <details className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 mb-6" open>
+        <summary className="cursor-pointer text-sm font-medium text-zinc-500">
+          ⚙️ Marriage projection settings
+        </summary>
 
-          <div>
-            <h3 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
-              Annual growth %
-            </h3>
-            <NumberField
-              label="Savings"
-              value={cfg.growth.savings_annual * 100}
-              suffix="%"
-              onChange={(v) => updateGrowth("savings_annual", v / 100)}
-            />
-            <NumberField
-              label="Condo"
-              value={cfg.growth.condo_annual * 100}
-              suffix="%"
-              onChange={(v) => updateGrowth("condo_annual", v / 100)}
-            />
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+          {/* Horizon */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Horizon</h3>
+            <label className="flex justify-between items-center gap-2">
+              Start month
+              <input
+                type="month"
+                value={cfg.start_month}
+                onChange={(e) => update((c) => ({ ...c, start_month: e.target.value }))}
+                className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1"
+              />
+            </label>
+            <label className="flex justify-between items-center gap-2">
+              Months ahead
+              <NumInput
+                value={cfg.months}
+                onChange={(n) => update((c) => ({ ...c, months: Math.max(1, Math.min(120, n)) }))}
+              />
+            </label>
           </div>
 
-          <div>
-            <h3 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
-              Horizon
-            </h3>
-            <NumberField
-              label="Months"
-              value={cfg.months}
-              onChange={(v) => update("months", v)}
-            />
-            <div className="text-xs text-ink-faint mt-2">
-              Start: <span className="font-mono">{cfg.start_month}</span>
-            </div>
+          {/* Growth rates */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Annual growth rates (%)</h3>
+            <label className="flex justify-between items-center gap-2">
+              Savings
+              <NumInput
+                value={cfg.growth.savings_annual * 100}
+                step="0.01"
+                onChange={(n) =>
+                  update((c) => ({ ...c, growth: { ...c.growth, savings_annual: n / 100 } }))
+                }
+              />
+            </label>
+            <label className="flex justify-between items-center gap-2">
+              Condo
+              <NumInput
+                value={cfg.growth.condo_annual * 100}
+                step="0.01"
+                onChange={(n) =>
+                  update((c) => ({ ...c, growth: { ...c.growth, condo_annual: n / 100 } }))
+                }
+              />
+            </label>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          {/* Starting balances */}
+          <div className="space-y-2">
+            <h3 className="font-medium">Starting balances</h3>
+            <label className="flex justify-between items-center gap-2">
+              Savings
+              <NumInput
+                value={cfg.starting.savings}
+                onChange={(n) =>
+                  update((c) => ({ ...c, starting: { ...c.starting, savings: n } }))
+                }
+              />
+            </label>
+            <label className="flex justify-between items-center gap-2">
+              Condo value
+              <NumInput
+                value={cfg.starting.condo_value}
+                onChange={(n) =>
+                  update((c) => ({ ...c, starting: { ...c.starting, condo_value: n } }))
+                }
+              />
+            </label>
+            <label className="flex justify-between items-center gap-2">
+              Condo loan
+              <NumInput
+                value={cfg.starting.condo_loan}
+                onChange={(n) =>
+                  update((c) => ({ ...c, starting: { ...c.starting, condo_loan: n } }))
+                }
+              />
+            </label>
+          </div>
+
           {/* Income lines */}
-          <div>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-                Income (monthly)
-              </h3>
-              <button
-                onClick={() => addLine("income_lines")}
-                className="text-xs text-jade hover:underline"
-              >
-                + Add line
-              </button>
-            </div>
-            <div className="space-y-2">
-              {cfg.income_lines.map((line, i) => (
-                <LineEditor
-                  key={i}
-                  line={line}
-                  onChange={(patch) => updateLine("income_lines", i, patch)}
-                  onRemove={() => removeLine("income_lines", i)}
+          <div className="space-y-2">
+            <h3 className="font-medium">Income lines (monthly)</h3>
+            {cfg.income_lines.map((line, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={line.label}
+                    onChange={(e) => updateLine("income_lines", i, { label: e.target.value })}
+                    className="flex-1 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1"
+                  />
+                  <NumInput
+                    value={line.monthly}
+                    onChange={(n) => updateLine("income_lines", i, { monthly: n })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeLine("income_lines", i)}
+                    className="text-red-500 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <ScheduleEditor
+                  label={line.label}
+                  schedule={line.schedule ?? []}
+                  onChange={(s) => updateLine("income_lines", i, { schedule: s })}
                 />
-              ))}
-            </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => addLine("income_lines")}
+              className="text-xs text-green-600 hover:text-green-700"
+            >
+              + Add income line
+            </button>
           </div>
 
           {/* Expense lines */}
-          <div>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-                Expenses (monthly)
-              </h3>
-              <button
-                onClick={() => addLine("expense_lines")}
-                className="text-xs text-oxblood hover:underline"
-              >
-                + Add line
-              </button>
-            </div>
-            <div className="space-y-2">
-              {cfg.expense_lines.map((line, i) => (
-                <LineEditor
-                  key={i}
-                  line={line}
-                  onChange={(patch) => updateLine("expense_lines", i, patch)}
-                  onRemove={() => removeLine("expense_lines", i)}
+          <div className="space-y-2 md:col-span-2">
+            <h3 className="font-medium">Expense lines (monthly)</h3>
+            {cfg.expense_lines.map((line, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={line.label}
+                    onChange={(e) => updateLine("expense_lines", i, { label: e.target.value })}
+                    className="flex-1 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1"
+                  />
+                  <NumInput
+                    value={line.monthly}
+                    onChange={(n) => updateLine("expense_lines", i, { monthly: n })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeLine("expense_lines", i)}
+                    className="text-red-500 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <ScheduleEditor
+                  label={line.label}
+                  schedule={line.schedule ?? []}
+                  onChange={(s) => updateLine("expense_lines", i, { schedule: s })}
                 />
-              ))}
-            </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => addLine("expense_lines")}
+              className="text-xs text-green-600 hover:text-green-700"
+            >
+              + Add expense line
+            </button>
+          </div>
+
+          {/* Save button — same position as Personal */}
+          <div className="md:col-span-2 flex items-center gap-3 pt-2">
+            <button
+              onClick={onSave}
+              disabled={pending}
+              className="px-3 py-1.5 text-sm rounded-lg bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 disabled:opacity-50"
+            >
+              {pending ? "Saving..." : "Save projection"}
+            </button>
+            {msg && (
+              <span className={msg.startsWith("Error") ? "text-red-500 text-xs" : "text-green-600 text-xs"}>
+                {msg}
+              </span>
+            )}
           </div>
         </div>
-      </div>
+      </details>
 
-      {/* Forecast/Budget/Actual table */}
-      <div className="card-surface rounded-2xl mb-6 overflow-hidden">
-        <div className="flex justify-between items-center px-4 py-3 border-b">
-          <h2 className="display text-base">Forecast vs Budget vs Actual</h2>
+      {/* Forecast / Budget / Actual table */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-6 overflow-hidden">
+        <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+          <h2 className="text-sm font-medium">Forecast vs Budget vs Actual</h2>
           <button
             onClick={() => setShowAll((v) => !v)}
-            className="text-xs text-ink-subtle hover:text-ink"
+            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             {showAll ? "Show first 12" : `Show all ${rows.length}`}
           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-paper-darker text-left text-ink-faint">
+            <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500">
               <tr>
-                <th className="px-3 py-2 sticky left-0 bg-paper-darker z-10">Line</th>
+                <th className="px-3 py-2 sticky left-0 bg-zinc-50 dark:bg-zinc-900 z-10">Line</th>
                 {visible.map((r) => (
                   <th key={r.month} className="px-3 py-2 text-right whitespace-nowrap">
                     {r.month}
@@ -364,74 +519,12 @@ export function MarriageProjectionClient({
   );
 }
 
-function NumberField({
-  label,
-  value,
-  onChange,
-  suffix,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  suffix?: string;
-}) {
-  return (
-    <label className="flex items-center justify-between gap-3 py-1.5 text-sm">
-      <span className="text-ink-subtle">{label}</span>
-      <span className="flex items-center gap-1">
-        <input
-          type="number"
-          step="any"
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="w-32 rounded border bg-transparent px-2 py-1 text-right font-mono"
-        />
-        {suffix && <span className="text-xs text-ink-faint">{suffix}</span>}
-      </span>
-    </label>
-  );
-}
-
-function LineEditor({
-  line,
-  onChange,
-  onRemove,
-}: {
-  line: ExpenseLine;
-  onChange: (patch: Partial<ExpenseLine>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        value={line.label}
-        onChange={(e) => onChange({ label: e.target.value })}
-        className="flex-1 rounded border bg-transparent px-2 py-1 text-sm"
-      />
-      <input
-        type="number"
-        step="any"
-        value={line.monthly}
-        onChange={(e) => onChange({ monthly: Number(e.target.value) })}
-        className="w-28 rounded border bg-transparent px-2 py-1 text-sm font-mono text-right"
-      />
-      <button
-        onClick={onRemove}
-        className="text-ink-faint hover:text-oxblood text-sm"
-        title="Remove line"
-      >
-        ✕
-      </button>
-    </div>
-  );
-}
-
 function Section({ label }: { label: string }) {
   return (
-    <tr className="bg-paper-darker">
+    <tr className="bg-zinc-50 dark:bg-zinc-900">
       <td
         colSpan={1000}
-        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-ink-faint sticky left-0"
+        className="px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-zinc-500 sticky left-0"
       >
         {label}
       </td>
@@ -455,15 +548,17 @@ function Row({
   return (
     <tr
       className={
-        "border-t " +
-        (highlight ? "bg-paper-darker " : "") +
-        (muted ? "text-ink-subtle " : "") +
+        "border-t border-zinc-200 dark:border-zinc-800 " +
+        (highlight ? "bg-zinc-50 dark:bg-zinc-900 " : "") +
+        (muted ? "text-zinc-400 dark:text-zinc-500 " : "") +
         (bold ? "font-medium " : "")
       }
     >
-      <td className="px-3 py-1.5 sticky left-0 bg-card whitespace-nowrap">{label}</td>
+      <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-zinc-950 whitespace-nowrap">
+        {label}
+      </td>
       {values.map((v, i) => (
-        <td key={i} className="px-3 py-1.5 text-right whitespace-nowrap font-mono tabular">
+        <td key={i} className="px-3 py-1.5 text-right whitespace-nowrap font-mono tabular-nums">
           {v === 0 ? "—" : fmt(v)}
         </td>
       ))}
