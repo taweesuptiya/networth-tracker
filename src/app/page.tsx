@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { setupWorkspaces } from "@/app/actions/workspaces";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AssetTable, type Asset } from "@/components/asset-table";
 import { AllocationChart } from "@/components/allocation-chart";
@@ -32,8 +33,21 @@ export default async function Home({
   if (!workspaces || workspaces.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="text-center">
-          <p className="text-zinc-500">No workspaces yet.</p>
+        <div className="text-center max-w-sm px-6">
+          <div className="text-4xl mb-4">👋</div>
+          <h1 className="text-xl font-semibold mb-2">Welcome to Ledger</h1>
+          <p className="text-zinc-500 text-sm mb-6">
+            Your account is ready. Click below to set up your Personal and Marriage
+            workspaces and get started.
+          </p>
+          <form action={setupWorkspaces}>
+            <button
+              type="submit"
+              className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Set up my workspaces →
+            </button>
+          </form>
         </div>
       </div>
     );
