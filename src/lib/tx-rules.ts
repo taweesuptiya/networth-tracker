@@ -10,6 +10,8 @@ export type Rule = {
   set_tx_type: "income" | "expense" | "transfer" | "cc_payment" | "cc_payment_received" | "reimbursement";
   set_category: string | null;
   enabled: boolean;
+  min_amount?: number | null;
+  max_amount?: number | null;
 };
 
 export type ParsedTx = {
@@ -30,6 +32,9 @@ function matches(rule: Rule, tx: ParsedTx, accountType: "savings" | "credit_card
   if (!rule.enabled) return false;
   if (rule.applies_to_account_type !== "all" && rule.applies_to_account_type !== accountType) return false;
   if (rule.applies_to_direction !== "all" && rule.applies_to_direction !== tx.direction) return false;
+  const amt = Number(tx.amount);
+  if (rule.min_amount != null && amt < Number(rule.min_amount)) return false;
+  if (rule.max_amount != null && amt > Number(rule.max_amount)) return false;
   const desc = tx.description ?? "";
   if (rule.match_type === "regex") {
     try {
