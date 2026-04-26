@@ -273,7 +273,7 @@ export function StatementUploader({
         setClassified([]);
         setFile(null);
         setCardAccountMap({});
-        setActiveCard("");
+        setActiveCards(new Set());
         router.refresh();
       }
     });
