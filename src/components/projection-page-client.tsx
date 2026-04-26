@@ -4,8 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import { project, type ProjectionConfig, type MonthRow } from "@/lib/projection";
 import { ProjectionSettings } from "./projection-settings";
 import { ProjectionTable, type SavedBudget } from "./projection-table";
-import { NetworthChart } from "./projection-charts";
-import { MonthlyBreakdownChart } from "./monthly-breakdown-chart";
 import { saveAsBudget, clearBudget } from "@/app/actions/projection";
 
 export type AssetMonthValues = Record<
@@ -124,8 +122,10 @@ export function ProjectionPageClient({
         initial={initialConfig}
         onSaved={(saved) => setCfg(saved)}
       />
-      <NetworthChart rows={rows} actuals={actualNetworth} />
-      <MonthlyBreakdownChart rows={rows} actuals={actuals} savedBudgets={budgets} />
+      <p className="text-xs text-ink-subtle mb-4 italic">
+        Charts moved to <a href="/" className="underline">Dashboard</a>. Settings and the
+        forecast/budget/actual table remain here.
+      </p>
       <ProjectionTable
         rows={rows}
         actuals={actuals}
