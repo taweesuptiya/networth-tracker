@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const items = [
-  { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/projection", label: "Projection", icon: "📈" },
-  { href: "/statements", label: "Upload transactions", icon: "📤" },
-  { href: "/transactions", label: "Transactions", icon: "📋" },
-  { href: "/accounts", label: "Accounts & rules", icon: "🏦" },
+  { href: "/", label: "Dashboard" },
+  { href: "/projection", label: "Projection" },
+  { href: "/transactions", label: "Transactions" },
+  { href: "/statements", label: "Upload" },
+  { href: "/accounts", label: "Accounts & rules" },
 ];
 
 export function Sidebar({ userEmail }: { userEmail: string | null }) {
@@ -18,17 +18,25 @@ export function Sidebar({ userEmail }: { userEmail: string | null }) {
   const wsQuery = ws ? `?ws=${ws}` : "";
 
   return (
-    <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 flex flex-col">
-      <div className="px-4 py-4 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="font-semibold text-sm">Net Worth</div>
+    <aside className="w-60 shrink-0 border-r flex flex-col">
+      <div className="px-6 pt-8 pb-6">
+        <Link href={`/${wsQuery}`} className="block">
+          <div className="display text-3xl leading-none">Ledger</div>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-ink-subtle mt-2">
+            Net worth · projection · spend
+          </div>
+        </Link>
         {userEmail && (
-          <div className="text-xs text-zinc-500 truncate" title={userEmail}>
+          <div className="mt-4 text-[11px] text-ink-faint truncate font-mono" title={userEmail}>
             {userEmail}
           </div>
         )}
       </div>
-      <nav className="flex-1 p-2">
-        {items.map((item) => {
+
+      <div className="border-t" />
+
+      <nav className="flex-1 px-3 py-4">
+        {items.map((item, idx) => {
           const active =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -37,20 +45,33 @@ export function Sidebar({ userEmail }: { userEmail: string | null }) {
               key={item.href}
               href={`${item.href}${wsQuery}`}
               className={
-                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 " +
+                "group flex items-center gap-3 px-3 py-2 text-sm transition-colors " +
                 (active
-                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium"
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-900")
+                  ? "text-ink"
+                  : "text-ink-subtle hover:text-ink")
               }
             >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
+              <span
+                className={
+                  "font-mono text-[10px] tabular-nums w-6 " +
+                  (active ? "text-oxblood" : "text-ink-faint")
+                }
+              >
+                {String(idx + 1).padStart(2, "0")}
+              </span>
+              <span className={active ? "italic font-serif text-base leading-none" : ""}>
+                {item.label}
+              </span>
+              {active && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-oxblood" />
+              )}
             </Link>
           );
         })}
       </nav>
-      <form action="/auth/signout" method="post" className="p-3 border-t border-zinc-200 dark:border-zinc-800">
-        <button className="w-full text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-left">
+
+      <form action="/auth/signout" method="post" className="px-6 py-4 border-t">
+        <button className="text-[11px] uppercase tracking-[0.18em] text-ink-faint hover:text-ink">
           Sign out
         </button>
       </form>

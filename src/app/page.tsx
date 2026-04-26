@@ -69,56 +69,104 @@ export default async function Home({
   const totalGain = totalCost > 0 ? costAssetsValue - totalCost : null;
   const totalGainPct = totalCost > 0 ? (totalGain! / totalCost) * 100 : null;
 
+  const dateString = new Date().toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <AppShell userEmail={user.email ?? null}>
-      <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Net Worth</h1>
-          <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
+      <header className="px-10 pt-10 pb-6 border-b">
+        <div className="flex items-baseline gap-4 mb-2">
+          <span className="text-[11px] uppercase tracking-[0.2em] text-ink-faint font-mono">
+            {dateString}
+          </span>
+          <span className="text-[11px] uppercase tracking-[0.2em] text-ink-faint font-mono">
+            № 01 · Dashboard
+          </span>
         </div>
-        <div className="flex items-center gap-4">
-          <RefreshButton workspaceId={active.id} />
-          <FxEditor workspaceId={active.id} initial={usdToThb} />
+        <div className="flex items-end justify-between gap-6">
+          <h1 className="display text-5xl leading-[1.05]">
+            Net Worth, <span className="text-oxblood">{active.name.toLowerCase()}</span>
+          </h1>
+          <div className="flex items-center gap-4 pb-1">
+            <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
+            <RefreshButton workspaceId={active.id} />
+            <FxEditor workspaceId={active.id} initial={usdToThb} />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 px-6 py-8 max-w-5xl w-full mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
-            <p className="text-sm text-zinc-500">{active.name} — total</p>
-            <p className="text-3xl font-semibold mt-1">{formatMoney(total, baseCurrency)}</p>
-          </div>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
-            <p className="text-sm text-zinc-500">Cost (assets with basis)</p>
-            <p className="text-2xl font-semibold mt-1">
-              {totalCost > 0 ? formatMoney(totalCost, baseCurrency) : "—"}
+      <main className="flex-1 px-10 py-10 max-w-6xl w-full mx-auto stagger">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-6 mb-12 rule-bottom pb-10">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
+              {active.name} · Total
             </p>
+            <p className="metric text-6xl">
+              {Math.round(total).toLocaleString("en-US")}
+            </p>
+            <p className="text-xs text-ink-subtle mt-2 font-mono">{baseCurrency}</p>
           </div>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
-            <p className="text-sm text-zinc-500">Gain / Loss</p>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
+              Cost basis
+            </p>
+            <p className="metric text-4xl text-ink-subtle">
+              {totalCost > 0 ? Math.round(totalCost).toLocaleString("en-US") : "—"}
+            </p>
+            {totalCost > 0 && (
+              <p className="text-xs text-ink-faint mt-2 font-mono">{baseCurrency}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
+              Gain / Loss
+            </p>
             {totalGain != null ? (
               <>
-                <p className={`text-2xl font-semibold mt-1 ${totalGain >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {totalGain >= 0 ? "+" : ""}{formatMoney(totalGain, baseCurrency)}
+                <p
+                  className={`metric text-4xl ${
+                    totalGain >= 0 ? "text-jade-bright" : "text-oxblood-bright"
+                  }`}
+                >
+                  {totalGain >= 0 ? "+" : "−"}
+                  {Math.round(Math.abs(totalGain)).toLocaleString("en-US")}
                 </p>
-                <p className={`text-sm ${totalGain >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {totalGainPct! >= 0 ? "+" : ""}{totalGainPct!.toFixed(2)}%
+                <p
+                  className={`text-sm font-mono mt-2 ${
+                    totalGain >= 0 ? "text-jade-bright" : "text-oxblood-bright"
+                  }`}
+                >
+                  {totalGainPct! >= 0 ? "+" : ""}
+                  {totalGainPct!.toFixed(2)}%
                 </p>
               </>
             ) : (
-              <p className="text-2xl font-semibold mt-1 text-zinc-400">—</p>
+              <p className="metric text-4xl text-ink-faint">—</p>
             )}
           </div>
-        </div>
+        </section>
 
-        <AllocationChart data={allocation} baseCurrency={baseCurrency} />
+        <section className="mb-12">
+          <h2 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-4">
+            Allocation
+          </h2>
+          <AllocationChart data={allocation} baseCurrency={baseCurrency} />
+        </section>
 
-        <AssetTable
-          workspaceId={active.id}
-          baseCurrency={baseCurrency}
-          usdToThb={usdToThb}
-          assets={assets}
-        />
+        <section>
+          <h2 className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-4">
+            Holdings
+          </h2>
+          <AssetTable
+            workspaceId={active.id}
+            baseCurrency={baseCurrency}
+            usdToThb={usdToThb}
+            assets={assets}
+          />
+        </section>
       </main>
     </AppShell>
   );
