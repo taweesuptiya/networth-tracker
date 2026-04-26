@@ -373,7 +373,7 @@ function PerAssetGroup({
           </td>
         ))}
       </tr>
-      <Row label="↳ M/M change" values={change} muted variance />
+      <Row label="↳ M/M change" values={change} muted variance positiveIsGood />
     </>
   );
 }

@@ -30,6 +30,8 @@ export function BackfillButton({ workspaceId }: { workspaceId: string }) {
           json.errors?.length ? ` · ${json.errors.length} errors` : ""
         }`
       );
+      // Always log full response for debugging
+      console.log("backfill response:", json);
       setErrors(json.errors ?? []);
       router.refresh();
     } catch (err) {
@@ -58,14 +60,20 @@ export function BackfillButton({ workspaceId }: { workspaceId: string }) {
       {result && <span className="text-ink-subtle">{result}</span>}
       {errors.length > 0 && (
         <div className="basis-full mt-2 rounded border border-oxblood p-3 text-xs">
-          <p className="font-medium mb-2">Per-asset errors:</p>
+          <p className="font-medium mb-2">Per-asset errors ({errors.length}):</p>
           <ul className="space-y-1 font-mono text-[11px]">
             {errors.map((e, i) => (
-              <li key={i} className="text-ink-subtle">
+              <li key={i} className="text-ink-subtle break-all">
                 {e}
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {result && errors.length === 0 && (
+        <div className="basis-full mt-2 text-[10px] text-ink-faint">
+          (Errors panel not appearing? Open DevTools console — full response is logged
+          there. Or Vercel may not have redeployed yet — hard reload Ctrl+Shift+R.)
         </div>
       )}
     </div>
