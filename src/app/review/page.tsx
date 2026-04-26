@@ -67,7 +67,7 @@ export default async function ReviewPage({
   // Saved budgets per month
   const { data: budgetRows } = await supabase
     .from("monthly_budgets")
-    .select("month, income_budget, expense_budget, net_save_budget, expense_lines")
+    .select("month, income_budget, expense_budget, net_save_budget, total_networth_budget, expense_lines")
     .eq("workspace_id", active.id);
   const budgetMap = new Map(
     (budgetRows ?? []).map((b) => [
@@ -76,6 +76,7 @@ export default async function ReviewPage({
         income: Number(b.income_budget),
         expense: Number(b.expense_budget),
         net_save: Number(b.net_save_budget),
+        total_nw: Number(b.total_networth_budget),
         lines: (b.expense_lines ?? []) as { label: string; amount: number }[],
       },
     ])
@@ -116,6 +117,8 @@ export default async function ReviewPage({
   for (const m of monthly) allMonths.add(m.month);
   for (const m of budgetMap.keys()) allMonths.add(m);
   const months = Array.from(allMonths).sort().reverse();
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   return (
     <AppShell userEmail={user.email ?? null}>
@@ -324,62 +327,101 @@ export default async function ReviewPage({
                   )}
                 </div>
 
-                {/* Asset movement */}
-                {(savingChange !== 0 || otherAssetChange != null) && (
-                  <div className="md:col-span-12 mt-2 pt-4 border-t">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
-                      Where assets moved
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                {/* Asset movement + asset-vs-budget */}
+                <div className="md:col-span-12 mt-2 pt-4 border-t">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-3">
+                    Asset movement & target
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm">
+                    <div>
+                      <p className="text-xs text-ink-subtle">
+                        Saving change (from cash flow)
+                      </p>
+                      <p
+                        className={
+                          "font-mono text-lg mt-1 " +
+                          (savingChange >= 0 ? "text-jade-bright" : "text-oxblood-bright")
+                        }
+                      >
+                        {savingChange >= 0 ? "+" : "−"}
+                        {fmt(Math.abs(savingChange))}
+                      </p>
+                    </div>
+                    {otherAssetChange != null && (
                       <div>
                         <p className="text-xs text-ink-subtle">
-                          Saving (cash &middot; from net flow)
+                          Investments change (NAV &middot; contributions)
                         </p>
                         <p
                           className={
                             "font-mono text-lg mt-1 " +
-                            (savingChange >= 0 ? "text-jade-bright" : "text-oxblood-bright")
+                            (otherAssetChange >= 0
+                              ? "text-jade-bright"
+                              : "text-oxblood-bright")
                           }
                         >
-                          {savingChange >= 0 ? "+" : "−"}
-                          {fmt(Math.abs(savingChange))}
+                          {otherAssetChange >= 0 ? "+" : "−"}
+                          {fmt(Math.abs(otherAssetChange))}
                         </p>
                       </div>
-                      {otherAssetChange != null && (
-                        <div>
-                          <p className="text-xs text-ink-subtle">
-                            Investments (NAV moves &middot; contributions)
-                          </p>
-                          <p
-                            className={
-                              "font-mono text-lg mt-1 " +
-                              (otherAssetChange >= 0
-                                ? "text-jade-bright"
-                                : "text-oxblood-bright")
-                            }
-                          >
-                            {otherAssetChange >= 0 ? "+" : "−"}
-                            {fmt(Math.abs(otherAssetChange))}
-                          </p>
-                        </div>
-                      )}
-                      {nwChange != null && (
-                        <div>
-                          <p className="text-xs text-ink-subtle">Total net worth</p>
-                          <p
-                            className={
-                              "font-mono text-lg mt-1 " +
-                              (nwChange >= 0 ? "text-jade-bright" : "text-oxblood-bright")
-                            }
-                          >
-                            {nwChange >= 0 ? "+" : "−"}
-                            {fmt(Math.abs(nwChange))}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    )}
+                    {(() => {
+                      // Determine actual NW for this month: use snapshot last value if available;
+                      // for the current month, prefer current live asset total.
+                      const isCurrent = m === currentMonth;
+                      const actualNw =
+                        isCurrent && currentTotal > 0
+                          ? currentTotal
+                          : snap?.last ?? null;
+                      const expected = budget?.total_nw ?? forecast?.total_networth ?? null;
+                      if (expected == null && actualNw == null) return null;
+                      return (
+                        <>
+                          <div>
+                            <p className="text-xs text-ink-subtle">
+                              Net worth (actual)
+                              {isCurrent && (
+                                <span className="ml-1 text-[10px] uppercase tracking-wider text-oxblood">
+                                  live
+                                </span>
+                              )}
+                            </p>
+                            <p className="font-mono text-lg mt-1">
+                              {actualNw != null ? fmt(actualNw) : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-ink-subtle">
+                              Net worth (target / budget)
+                            </p>
+                            <p className="font-mono text-lg mt-1 text-ink-subtle">
+                              {expected != null ? fmt(expected) : "—"}
+                            </p>
+                            {expected != null && actualNw != null && (
+                              <p
+                                className={
+                                  "text-xs font-mono mt-1 " +
+                                  (actualNw >= expected
+                                    ? "text-jade-bright"
+                                    : "text-oxblood-bright")
+                                }
+                              >
+                                vs target:{" "}
+                                {actualNw >= expected ? "+" : "−"}
+                                {fmt(Math.abs(actualNw - expected))} (
+                                {actualNw >= expected ? "+" : "−"}
+                                {Math.abs(((actualNw - expected) / expected) * 100).toFixed(
+                                  1
+                                )}
+                                %)
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
-                )}
+                </div>
               </article>
             );
           })
