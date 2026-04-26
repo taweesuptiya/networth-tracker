@@ -7,10 +7,12 @@ export function BackfillButton({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const [fromMonth, setFromMonth] = useState("2026-01");
 
   async function run() {
     setResult(null);
+    setErrors([]);
     setRunning(true);
     try {
       const res = await fetch("/api/backfill-snapshots", {
@@ -28,6 +30,7 @@ export function BackfillButton({ workspaceId }: { workspaceId: string }) {
           json.errors?.length ? ` · ${json.errors.length} errors` : ""
         }`
       );
+      setErrors(json.errors ?? []);
       router.refresh();
     } catch (err) {
       setResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -53,6 +56,18 @@ export function BackfillButton({ workspaceId }: { workspaceId: string }) {
         {running ? "Backfilling..." : "↻ Backfill investment history"}
       </button>
       {result && <span className="text-ink-subtle">{result}</span>}
+      {errors.length > 0 && (
+        <div className="basis-full mt-2 rounded border border-oxblood p-3 text-xs">
+          <p className="font-medium mb-2">Per-asset errors:</p>
+          <ul className="space-y-1 font-mono text-[11px]">
+            {errors.map((e, i) => (
+              <li key={i} className="text-ink-subtle">
+                {e}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -59,10 +59,24 @@ export async function POST(request: Request) {
 
       let monthlyPrices: { month: string; price: number; currency: string }[] = [];
 
-      if (a.price_source === "yahoo" && a.symbol && units > 0) {
-        monthlyPrices = await fetchYahooMonthly(a.symbol, fromMonth, toMonth);
-      } else if (a.price_source === "finnomena" && a.symbol && units > 0) {
-        monthlyPrices = await fetchFinnomenaMonthly(a.symbol, fromMonth, toMonth);
+      try {
+        if (a.price_source === "yahoo" && a.symbol && units > 0) {
+          monthlyPrices = await fetchYahooMonthly(a.symbol, fromMonth, toMonth);
+          if (monthlyPrices.length === 0) {
+            errors.push(`${a.name} (${a.symbol}): Yahoo returned no history`);
+          }
+        } else if (a.price_source === "finnomena" && a.symbol && units > 0) {
+          monthlyPrices = await fetchFinnomenaMonthly(a.symbol, fromMonth, toMonth);
+          if (monthlyPrices.length === 0) {
+            errors.push(`${a.name} (${a.symbol}): finnomena returned no history`);
+          }
+        } else if (a.price_source !== "manual") {
+          errors.push(
+            `${a.name}: source=${a.price_source}, symbol=${a.symbol ?? "none"}, units=${units} — skipped`
+          );
+        }
+      } catch (e) {
+        errors.push(`${a.name}: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       const records: {
