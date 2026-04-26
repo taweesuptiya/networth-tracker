@@ -170,8 +170,9 @@ export function MonthlyBreakdownChart({
             />
             <YAxis tick={{ fontSize: 10 }} tickFormatter={fmt} />
             <ReferenceLine y={0} stroke="#00000033" />
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Tooltip
-              content={(props: { active?: boolean; payload?: Array<{ payload: Record<string, number | string | null> }>; label?: string }) => (
+              content={((props: any) => (
                 <BreakdownTooltip
                   active={props.active}
                   payload={props.payload}
@@ -179,7 +180,7 @@ export function MonthlyBreakdownChart({
                   topCats={topCats}
                   colorMap={colorMap}
                 />
-              )}
+              )) as never}
             />
 
             {/* Actual stack — solid */}
