@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { project, type ProjectionConfig, type MonthRow } from "@/lib/projection";
 import { ProjectionSettings } from "./projection-settings";
 import { ProjectionTable, type SavedBudget } from "./projection-table";
-import { NetworthChart, CashFlowChart } from "./projection-charts";
+import { NetworthChart } from "./projection-charts";
+import { MonthlyBreakdownChart } from "./monthly-breakdown-chart";
 import { saveAsBudget, clearBudget } from "@/app/actions/projection";
 
 export type AssetMonthValues = Record<
@@ -124,7 +125,7 @@ export function ProjectionPageClient({
         onSaved={(saved) => setCfg(saved)}
       />
       <NetworthChart rows={rows} actuals={actualNetworth} />
-      <CashFlowChart rows={rows} actuals={actuals} />
+      <MonthlyBreakdownChart rows={rows} actuals={actuals} savedBudgets={budgets} />
       <ProjectionTable
         rows={rows}
         actuals={actuals}
