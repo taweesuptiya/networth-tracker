@@ -22,6 +22,6 @@ export async function setupWorkspaces() {
     { user_id: user.id, name: "Marriage", base_currency: "THB" },
   ]);
 
-  if (error) return { error: error.message };
+  if (error) redirect("/");
   redirect("/");
 }
