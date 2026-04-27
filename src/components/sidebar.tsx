@@ -16,10 +16,12 @@ export function Sidebar({
   userEmail,
   isOpen = false,
   onClose,
+  onHelp,
 }: {
   userEmail: string | null;
   isOpen?: boolean;
   onClose?: () => void;
+  onHelp?: () => void;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -95,11 +97,21 @@ export function Sidebar({
           })}
         </div>
 
-        <form action="/auth/signout" method="post" className="px-3 py-3 border-t mx-1 mt-2">
-          <button className="text-[11px] uppercase tracking-[0.18em] text-ink-faint hover:text-ink">
-            Sign out
+        <div className="flex items-center justify-between px-3 py-3 border-t mx-1 mt-2">
+          <form action="/auth/signout" method="post">
+            <button className="text-[11px] uppercase tracking-[0.18em] text-ink-faint hover:text-ink transition-colors">
+              Sign out
+            </button>
+          </form>
+          {/* Help button — desktop */}
+          <button
+            onClick={onHelp}
+            aria-label="Help"
+            className="w-6 h-6 rounded-full border flex items-center justify-center text-[11px] font-mono text-ink-faint hover:text-ink hover:border-ink transition-colors"
+          >
+            ?
           </button>
-        </form>
+        </div>
       </nav>
     </aside>
   );
