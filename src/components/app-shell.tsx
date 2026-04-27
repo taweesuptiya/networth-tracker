@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "./sidebar";
+import { OnboardingModal, ONBOARDING_KEY } from "./onboarding-modal";
 
 export function AppShell({
   userEmail,
@@ -11,6 +12,23 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+
+  // Auto-show for first-time users
+  useEffect(() => {
+    if (!localStorage.getItem(ONBOARDING_KEY)) {
+      setOnboardingOpen(true);
+    }
+  }, []);
+
+  function openOnboarding() {
+    setOnboardingOpen(true);
+  }
+
+  function closeOnboarding() {
+    localStorage.setItem(ONBOARDING_KEY, "1");
+    setOnboardingOpen(false);
+  }
 
   return (
     <div className="flex flex-1 min-h-screen">
@@ -25,7 +43,15 @@ export function AppShell({
           <span className="block h-px w-5 bg-ink" />
           <span className="block h-px w-5 bg-ink" />
         </button>
-        <span className="display text-2xl leading-none">Ledger</span>
+        <span className="display text-2xl leading-none flex-1">Ledger</span>
+        {/* Help button — mobile */}
+        <button
+          onClick={openOnboarding}
+          aria-label="Help"
+          className="w-6 h-6 rounded-full border flex items-center justify-center text-[11px] font-mono text-ink-faint hover:text-ink hover:border-ink transition-colors"
+        >
+          ?
+        </button>
       </header>
 
       {/* Backdrop */}
@@ -41,11 +67,14 @@ export function AppShell({
         userEmail={userEmail}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onHelp={openOnboarding}
       />
 
       <div className="flex-1 flex flex-col min-w-0 pt-14 md:pt-0">
         {children}
       </div>
+
+      <OnboardingModal open={onboardingOpen} onClose={closeOnboarding} />
     </div>
   );
 }
