@@ -26,10 +26,6 @@ function fmt(n: number) {
   return n.toFixed(0);
 }
 
-function fmtFull(n: number) {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-
 const SETTINGS_FIELDS: { key: keyof typeof DEFAULT_EOL_SETTINGS; label: string; step?: number }[] = [
   { key: "birthYear", label: "Birth year", step: 1 },
   { key: "startYear", label: "Start year", step: 1 },
@@ -79,7 +75,6 @@ export function EolClient({
   const peakNW = Math.max(...calc.map((r) => r.netWorth));
   const finalNW = calc[calc.length - 1]?.netWorth ?? 0;
   const fireAge = calc.find((r) => r.passivePct >= 100)?.age ?? null;
-  const retirementRow = calc.find((r) => r.activeIncome === 0 && r.passiveIncome > 0);
 
   function updateRow(idx: number, key: keyof EolRowInput, val: string | number | undefined) {
     setRows((prev) => {
@@ -158,22 +153,22 @@ export function EolClient({
             <XAxis dataKey="year" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v + "M"} />
             <Tooltip
-              formatter={(val: number, name: string) =>
+              formatter={(val, name) =>
                 name === "nw"
-                  ? [val + "M " + currency, "Net Worth"]
-                  : [val + "%", "Passive %"]
+                  ? [Number(val).toFixed(1) + "M " + currency, "Net Worth"]
+                  : [Number(val).toFixed(0) + "%", "Passive %"]
               }
               labelFormatter={(label) => {
-                const row = calc.find((r) => r.year === label);
+                const row = calc.find((r) => r.year === Number(label));
                 return `${label} (age ${row?.age ?? ""})`;
               }}
             />
-            {fireAge && (
+            {fireAge !== null && (
               <ReferenceLine
                 x={fireAge + settings.birthYear}
                 stroke="#22c55e"
                 strokeDasharray="4 4"
-                label={{ value: "FIRE", fontSize: 10, fill: "#22c55e" }}
+                label="FIRE"
               />
             )}
             <Line type="monotone" dataKey="nw" stroke="#6366f1" strokeWidth={2} dot={false} />
@@ -274,12 +269,13 @@ export function EolClient({
                           }
                           placeholder={col.type === "text" ? "" : col.key === "monthlyColOverride" ? String(Math.round(settings.defaultMonthlyCoL)) : "0"}
                           onChange={(e) => {
-                            const v = col.type === "text"
-                              ? e.target.value
-                              : col.key === "monthlyColOverride"
-                              ? e.target.value === "" ? undefined : parseFloat(e.target.value) || 0
-                              : parseFloat(e.target.value) || 0;
-                            updateRow(idx, col.key, v as string | number);
+                            const v: string | number | undefined =
+                              col.type === "text"
+                                ? e.target.value
+                                : col.key === "monthlyColOverride"
+                                ? e.target.value === "" ? undefined : parseFloat(e.target.value) || 0
+                                : parseFloat(e.target.value) || 0;
+                            updateRow(idx, col.key, v);
                           }}
                           className="w-full rounded border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-zinc-400 dark:focus:border-zinc-500 bg-transparent px-1.5 py-0.5 text-xs font-mono outline-none transition-colors"
                         />
