@@ -7,6 +7,7 @@ const items = [
   { href: "/", label: "Dashboard" },
   { href: "/review", label: "Monthly review" },
   { href: "/projection", label: "Projection" },
+  { href: "/eol", label: "EOL Projection" },
   { href: "/transactions", label: "Transactions" },
   { href: "/statements", label: "Upload" },
   { href: "/accounts", label: "Accounts & rules" },
