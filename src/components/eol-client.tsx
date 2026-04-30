@@ -193,7 +193,7 @@ export function EolClient({
                 <input
                   type="number"
                   step={step ?? 1}
-                  value={(settings as Record<string, number>)[key]}
+                  value={(settings as unknown as Record<string, number>)[key]}
                   onChange={(e) => updateSetting(key, parseFloat(e.target.value) || 0)}
                   className="rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm w-full"
                 />
