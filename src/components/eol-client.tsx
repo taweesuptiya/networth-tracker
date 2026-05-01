@@ -22,8 +22,7 @@ import { saveEolConfig } from "@/app/actions/eol";
 
 function fmt(n: number) {
   if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-  if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(0) + "K";
-  return n.toFixed(0);
+  return Math.round(n).toLocaleString("en-US");
 }
 
 const SETTINGS_FIELDS: { key: keyof typeof DEFAULT_EOL_SETTINGS; label: string; step?: number }[] = [
@@ -40,17 +39,6 @@ const SETTINGS_FIELDS: { key: keyof typeof DEFAULT_EOL_SETTINGS; label: string; 
   { key: "colGrowthRate", label: "CoL growth % / yr", step: 0.5 },
 ];
 
-const ROW_COLS: { key: keyof EolRowInput; label: string; type?: "text" | "number"; step?: number; width?: string }[] = [
-  { key: "event", label: "Event", type: "text", width: "120px" },
-  { key: "company", label: "Company", type: "text", width: "100px" },
-  { key: "monthlySalary", label: "Monthly salary", step: 5000, width: "110px" },
-  { key: "salaryGrowthPct", label: "Salary +%", step: 1, width: "80px" },
-  { key: "cashBonus", label: "Cash bonus", step: 10000, width: "100px" },
-  { key: "sharesVested", label: "# Shares", step: 100, width: "90px" },
-  { key: "sharePrice", label: "Share price", step: 1, width: "90px" },
-  { key: "monthlyColOverride", label: "Monthly CoL", step: 5000, width: "100px" },
-];
-
 export function EolClient({
   workspaceId,
   initialConfig,
@@ -60,7 +48,10 @@ export function EolClient({
   initialConfig: EolConfig;
   currency: string;
 }) {
-  const [settings, setSettings] = useState<EolConfig>(initialConfig);
+  const [settings, setSettings] = useState<EolConfig>({
+    ...DEFAULT_EOL_SETTINGS,
+    ...initialConfig,
+  });
   const [rows, setRows] = useState<EolRowInput[]>(initialConfig.rows);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -109,6 +100,19 @@ export function EolClient({
       }
       return next;
     });
+    setSaved(false);
+  }
+
+  function applyGlobalSalary() {
+    const base = settings.globalMonthlySalary;
+    const uplift = settings.globalSalaryUpliftPct;
+    setRows((prev) =>
+      prev.map((row, i) => ({
+        ...row,
+        monthlySalary: Math.round(base * Math.pow(1 + uplift / 100, i)),
+        salaryGrowthPct: uplift,
+      }))
+    );
     setSaved(false);
   }
 
@@ -200,7 +204,56 @@ export function EolClient({
                   />
                 </label>
               ))}
+              {/* Share price currency — text field */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-zinc-500">Share price currency</span>
+                <input
+                  type="text"
+                  value={settings.sharePriceCurrency}
+                  onChange={(e) => setSettings((p) => ({ ...p, sharePriceCurrency: e.target.value.toUpperCase() }))}
+                  maxLength={5}
+                  placeholder="USD"
+                  className="rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm w-full font-mono"
+                />
+              </label>
             </div>
+
+            {/* Salary auto-fill */}
+            <div className="mt-5 pt-4 border-t">
+              <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-3">Salary projection auto-fill</div>
+              <div className="flex flex-wrap gap-3 items-end">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-zinc-500">Starting monthly salary</span>
+                  <input
+                    type="number"
+                    step={5000}
+                    value={settings.globalMonthlySalary}
+                    onChange={(e) => updateSetting("globalMonthlySalary", parseFloat(e.target.value) || 0)}
+                    className="rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm w-40"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-zinc-500">Annual uplift %</span>
+                  <input
+                    type="number"
+                    step={0.5}
+                    value={settings.globalSalaryUpliftPct}
+                    onChange={(e) => updateSetting("globalSalaryUpliftPct", parseFloat(e.target.value) || 0)}
+                    className="rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm w-28"
+                  />
+                </label>
+                <button
+                  onClick={applyGlobalSalary}
+                  className="px-3 py-1.5 text-xs rounded border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  Apply to all rows
+                </button>
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-2">
+                Overwrites monthly salary in every row with compound growth from the starting value.
+              </p>
+            </div>
+
             <div className="flex items-center justify-end gap-2 mt-4">
               {saved && <span className="text-xs text-green-600">Saved ✓</span>}
               <button
@@ -237,7 +290,9 @@ export function EolClient({
                 <th className="text-left py-1.5 pr-3 font-medium text-zinc-500 whitespace-nowrap sticky left-0 bg-white dark:bg-zinc-900 z-10">Year</th>
                 <th className="text-left py-1.5 pr-3 font-medium text-zinc-500 whitespace-nowrap">Age</th>
                 {ROW_COLS.map((c) => (
-                  <th key={c.key} className="text-left py-1.5 pr-3 font-medium text-zinc-500 whitespace-nowrap">{c.label}</th>
+                  <th key={c.key} className="text-left py-1.5 pr-3 font-medium text-zinc-500 whitespace-nowrap">
+                    {c.key === "sharePrice" ? `Share price (${settings.sharePriceCurrency})` : c.label}
+                  </th>
                 ))}
                 <th className="text-right py-1.5 pr-3 font-medium text-zinc-500 whitespace-nowrap">Active</th>
                 <th className="text-right py-1.5 pr-3 font-medium text-zinc-500 whitespace-nowrap">Passive</th>
