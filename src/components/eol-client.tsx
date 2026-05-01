@@ -39,6 +39,17 @@ const SETTINGS_FIELDS: { key: keyof typeof DEFAULT_EOL_SETTINGS; label: string; 
   { key: "colGrowthRate", label: "CoL growth % / yr", step: 0.5 },
 ];
 
+const ROW_COLS: { key: keyof EolRowInput; label: string; type?: "text" | "number"; step?: number; width?: string }[] = [
+  { key: "event", label: "Event", type: "text", width: "120px" },
+  { key: "company", label: "Company", type: "text", width: "100px" },
+  { key: "monthlySalary", label: "Monthly salary", step: 5000, width: "110px" },
+  { key: "salaryGrowthPct", label: "Salary +%", step: 1, width: "80px" },
+  { key: "cashBonus", label: "Cash bonus", step: 10000, width: "100px" },
+  { key: "sharesVested", label: "# Shares", step: 100, width: "90px" },
+  { key: "sharePrice", label: "Share price", step: 1, width: "90px" },
+  { key: "monthlyColOverride", label: "Monthly CoL", step: 5000, width: "100px" },
+];
+
 export function EolClient({
   workspaceId,
   initialConfig,
