@@ -186,19 +186,31 @@ export function EolClient({
           <span className="text-zinc-400 text-xs">{settingsOpen ? "▲ collapse" : "▼ expand"}</span>
         </button>
         {settingsOpen && (
-          <div className="px-5 pb-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 border-t pt-4">
-            {SETTINGS_FIELDS.map(({ key, label, step }) => (
-              <label key={key} className="flex flex-col gap-1">
-                <span className="text-[11px] text-zinc-500">{label}</span>
-                <input
-                  type="number"
-                  step={step ?? 1}
-                  value={(settings as unknown as Record<string, number>)[key]}
-                  onChange={(e) => updateSetting(key, parseFloat(e.target.value) || 0)}
-                  className="rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm w-full"
-                />
-              </label>
-            ))}
+          <div className="px-5 pb-5 border-t pt-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {SETTINGS_FIELDS.map(({ key, label, step }) => (
+                <label key={key} className="flex flex-col gap-1">
+                  <span className="text-[11px] text-zinc-500">{label}</span>
+                  <input
+                    type="number"
+                    step={step ?? 1}
+                    value={(settings as unknown as Record<string, number>)[key]}
+                    onChange={(e) => updateSetting(key, parseFloat(e.target.value) || 0)}
+                    className="rounded border border-zinc-200 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm w-full"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              {saved && <span className="text-xs text-green-600">Saved ✓</span>}
+              <button
+                onClick={onSave}
+                disabled={pending}
+                className="px-3 py-1.5 text-xs rounded bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 disabled:opacity-50"
+              >
+                {pending ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
         )}
       </div>
