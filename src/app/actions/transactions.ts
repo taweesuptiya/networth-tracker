@@ -29,9 +29,8 @@ export type CommitTx = {
   units_delta?: number | null;
 };
 
-function dupKey(t: { occurred_at: string; amount: number; direction: string; description: string }) {
-  const desc = (t.description ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  return `${t.occurred_at}|${Math.round(Number(t.amount) * 100) / 100}|${t.direction}|${desc}`;
+function dupKey(t: { occurred_at: string; amount: number; direction: string }) {
+  return `${t.occurred_at}|${Math.round(Number(t.amount) * 100) / 100}|${t.direction}`;
 }
 
 export async function checkForDuplicates(
@@ -45,17 +44,17 @@ export async function checkForDuplicates(
   const to = dates[dates.length - 1];
   const { data: existing } = await supabase
     .from("transactions")
-    .select("occurred_at, amount, direction, description")
+    .select("occurred_at, amount, direction")
     .eq("workspace_id", workspaceId)
     .gte("occurred_at", from)
-    .lte("occurred_at", to);
+    .lte("occurred_at", to)
+    .limit(10000);
   const existingKeys = new Set(
     (existing ?? []).map((e) =>
       dupKey({
         occurred_at: String(e.occurred_at),
         amount: Number(e.amount),
         direction: String(e.direction),
-        description: String(e.description ?? ""),
       })
     )
   );
