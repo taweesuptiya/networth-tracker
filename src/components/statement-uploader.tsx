@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { commitTransactions, checkForDuplicates, type CommitTx } from "@/app/actions/transactions";
 import { createRule } from "@/app/actions/accounts";
+import { createAsset } from "@/app/actions/assets";
 import { classify, type Rule, type ClassifiedTx } from "@/lib/tx-rules";
 
 type ParsedTx = {
@@ -130,6 +131,14 @@ export function StatementUploader({
   const [skippedDup, setSkippedDup] = useState<number>(0);
   const [progress, setProgress] = useState<string>("");
   const [dupes, setDupes] = useState<boolean[]>([]);
+  const [localAssets, setLocalAssets] = useState<AssetRef[]>(assets);
+  // Per-row inline new-asset form state
+  const [newAssetRow, setNewAssetRow] = useState<number | null>(null);
+  const [newAssetName, setNewAssetName] = useState("");
+  const [newAssetType, setNewAssetType] = useState<"Stock" | "Fund" | "Crypto">("Stock");
+  const [newAssetSymbol, setNewAssetSymbol] = useState("");
+  const [newAssetCurrency, setNewAssetCurrency] = useState("USD");
+  const [creatingAsset, setCreatingAsset] = useState(false);
   // For multi-card statements: which card_last4 buckets the user has visible (multi-select).
   const [activeCards, setActiveCards] = useState<Set<string>>(new Set());
   // Per-card chosen account (when single PDF has multiple cards).
@@ -615,36 +624,96 @@ export function StatementUploader({
                         </select>
                       )}
                       {t.tx_type === "asset_buy" && (
-                        <span className="ml-1 inline-flex gap-1">
-                          <select
-                            value={targetAsset[i] ?? ""}
-                            onChange={(e) =>
-                              setTargetAsset({ ...targetAsset, [i]: e.target.value })
-                            }
-                            className="rounded border bg-transparent px-1 py-0.5"
-                            title="Asset bought"
-                          >
-                            <option value="">— pick asset —</option>
-                            {assets
-                              .filter((a) =>
-                                ["Stock", "Fund", "Crypto"].includes(a.type)
-                              )
-                              .map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.name}
-                                </option>
-                              ))}
-                          </select>
-                          <input
-                            type="number"
-                            step="any"
-                            value={unitsDelta[i] ?? ""}
-                            onChange={(e) =>
-                              setUnitsDelta({ ...unitsDelta, [i]: e.target.value })
-                            }
-                            placeholder="units"
-                            className="w-20 rounded border bg-transparent px-1 py-0.5 font-mono text-right"
-                          />
+                        <span className="ml-1 flex flex-col gap-1">
+                          <span className="inline-flex gap-1 items-center">
+                            <select
+                              value={targetAsset[i] ?? ""}
+                              onChange={(e) => setTargetAsset({ ...targetAsset, [i]: e.target.value })}
+                              className="rounded border bg-transparent px-1 py-0.5 text-xs"
+                              title="Asset bought"
+                            >
+                              <option value="">— pick asset —</option>
+                              {localAssets
+                                .filter((a) => ["Stock", "Fund", "Crypto"].includes(a.type))
+                                .map((a) => (
+                                  <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                            </select>
+                            <input
+                              type="number"
+                              step="any"
+                              value={unitsDelta[i] ?? ""}
+                              onChange={(e) => setUnitsDelta({ ...unitsDelta, [i]: e.target.value })}
+                              placeholder="units"
+                              className="w-20 rounded border bg-transparent px-1 py-0.5 font-mono text-right text-xs"
+                            />
+                            <button
+                              className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                              onClick={() => { setNewAssetRow(newAssetRow === i ? null : i); setNewAssetName(""); setNewAssetSymbol(""); }}
+                            >
+                              {newAssetRow === i ? "✕ cancel" : "+ new"}
+                            </button>
+                          </span>
+                          {newAssetRow === i && (
+                            <span className="flex flex-wrap gap-1 items-center pl-1 border-l-2 border-blue-400">
+                              <input
+                                autoFocus
+                                placeholder="Asset name"
+                                value={newAssetName}
+                                onChange={(e) => setNewAssetName(e.target.value)}
+                                className="rounded border px-1 py-0.5 text-xs w-32 bg-transparent"
+                              />
+                              <select
+                                value={newAssetType}
+                                onChange={(e) => setNewAssetType(e.target.value as "Stock" | "Fund" | "Crypto")}
+                                className="rounded border px-1 py-0.5 text-xs bg-transparent"
+                              >
+                                <option>Stock</option>
+                                <option>Fund</option>
+                                <option>Crypto</option>
+                              </select>
+                              <input
+                                placeholder="Symbol (opt)"
+                                value={newAssetSymbol}
+                                onChange={(e) => setNewAssetSymbol(e.target.value)}
+                                className="rounded border px-1 py-0.5 text-xs w-24 bg-transparent font-mono uppercase"
+                              />
+                              <input
+                                placeholder="CCY"
+                                value={newAssetCurrency}
+                                onChange={(e) => setNewAssetCurrency(e.target.value.toUpperCase())}
+                                className="rounded border px-1 py-0.5 text-xs w-16 bg-transparent font-mono uppercase"
+                              />
+                              <button
+                                disabled={!newAssetName.trim() || creatingAsset}
+                                onClick={async () => {
+                                  setCreatingAsset(true);
+                                  const res = await createAsset({
+                                    workspace_id: workspaceId,
+                                    name: newAssetName.trim(),
+                                    type: newAssetType,
+                                    symbol: newAssetSymbol.trim() || null,
+                                    currency: newAssetCurrency.trim() || "USD",
+                                    price_source: "manual",
+                                  });
+                                  setCreatingAsset(false);
+                                  if (!res.error) {
+                                    // Reload assets list by re-fetching via router soft refresh
+                                    // and optimistically add to local list
+                                    const tempId = `new-${Date.now()}`;
+                                    const created: AssetRef = { id: tempId, name: newAssetName.trim(), type: newAssetType };
+                                    setLocalAssets((prev) => [...prev, created]);
+                                    setTargetAsset({ ...targetAsset, [i]: tempId });
+                                    setNewAssetRow(null);
+                                    router.refresh();
+                                  }
+                                }}
+                                className="px-2 py-0.5 text-xs rounded bg-zinc-900 text-white disabled:opacity-50"
+                              >
+                                {creatingAsset ? "…" : "Create"}
+                              </button>
+                            </span>
+                          )}
                         </span>
                       )}
                     </td>
