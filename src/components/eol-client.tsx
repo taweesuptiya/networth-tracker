@@ -116,6 +116,48 @@ export function EolClient({
     setSaved(false);
   }
 
+  function handleCellPaste(
+    e: React.ClipboardEvent<HTMLInputElement>,
+    startRowIdx: number,
+    colKey: keyof EolRowInput
+  ) {
+    const text = e.clipboardData.getData("text");
+    const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+    if (lines.length <= 1 && !lines[0]?.includes("\t")) return; // single cell — let browser handle
+    e.preventDefault();
+
+    const colKeys = ROW_COLS.map((c) => c.key);
+    const startColIdx = colKeys.indexOf(colKey);
+
+    setRows((prev) => {
+      const next = [...prev];
+      lines.forEach((line, rowOffset) => {
+        const rowIdx = startRowIdx + rowOffset;
+        if (rowIdx >= next.length) return;
+        const cells = line.split("\t");
+        cells.forEach((cell, colOffset) => {
+          const targetColIdx = startColIdx + colOffset;
+          if (targetColIdx >= colKeys.length) return;
+          const targetKey = colKeys[targetColIdx];
+          const col = ROW_COLS.find((c) => c.key === targetKey);
+          if (!col) return;
+          const trimmed = cell.trim();
+          let val: string | number | undefined;
+          if (col.type === "text") {
+            val = trimmed;
+          } else if (targetKey === "monthlyColOverride") {
+            val = trimmed === "" ? undefined : parseFloat(trimmed.replace(/,/g, "")) || 0;
+          } else {
+            val = parseFloat(trimmed.replace(/,/g, "")) || 0;
+          }
+          next[rowIdx] = { ...next[rowIdx], [targetKey]: val };
+        });
+      });
+      return next;
+    });
+    setSaved(false);
+  }
+
   function onSave() {
     setSaved(false);
     startTransition(async () => {
@@ -344,6 +386,7 @@ export function EolClient({
                                 : parseFloat(e.target.value) || 0;
                             updateRow(idx, col.key, v);
                           }}
+                          onPaste={(e) => handleCellPaste(e, idx, col.key)}
                           className="w-full rounded border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-zinc-400 dark:focus:border-zinc-500 bg-transparent px-1.5 py-0.5 text-xs font-mono outline-none transition-colors"
                         />
                       </td>
