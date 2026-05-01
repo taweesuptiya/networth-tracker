@@ -31,7 +31,7 @@ export function AppShell({
   }
 
   return (
-    <div className="flex flex-1 min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Mobile top bar */}
       <header className="fixed top-0 inset-x-0 h-14 border-b flex items-center px-4 gap-3 bg-paper z-20 md:hidden">
         <button
@@ -70,7 +70,7 @@ export function AppShell({
         onHelp={openOnboarding}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 pt-14 md:pt-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-14 md:pt-0">
         {children}
       </div>
 

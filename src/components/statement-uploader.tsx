@@ -534,11 +534,24 @@ export function StatementUploader({
               </div>
             </div>
           )}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-3 max-h-[28rem] overflow-y-auto">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-3 max-h-[60vh] overflow-y-auto">
             <table className="w-full text-xs">
-              <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500 sticky top-0">
+              <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2 w-8"></th>
+                  <th className="px-3 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      title="Select / deselect all"
+                      checked={visibleIndexes.filter((i) => !dupes[i]).length > 0 && visibleIndexes.filter((i) => !dupes[i]).every((i) => selected.has(i))}
+                      onChange={(e) => {
+                        const nonDup = visibleIndexes.filter((i) => !dupes[i]);
+                        const next = new Set(selected);
+                        if (e.target.checked) nonDup.forEach((i) => next.add(i));
+                        else nonDup.forEach((i) => next.delete(i));
+                        setSelected(next);
+                      }}
+                    />
+                  </th>
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Description</th>
                   <th className="px-3 py-2">Type</th>
