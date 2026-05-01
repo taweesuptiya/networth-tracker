@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -67,6 +67,36 @@ export function EolClient({
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [focusedCell, setFocusedCell] = useState<{ rowIdx: number; colKey: keyof EolRowInput } | null>(null);
+  const [dragSource, setDragSource] = useState<{ rowIdx: number; colKey: keyof EolRowInput } | null>(null);
+  const [dragEndRow, setDragEndRow] = useState<number | null>(null);
+  const dragEndRowRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!dragSource) return;
+    const onUp = () => {
+      const endRow = dragEndRowRef.current;
+      if (endRow !== null && endRow !== dragSource.rowIdx) {
+        const lo = Math.min(dragSource.rowIdx, endRow);
+        const hi = Math.max(dragSource.rowIdx, endRow);
+        setRows((prev) => {
+          const next = [...prev];
+          const srcVal = next[dragSource.rowIdx]?.[dragSource.colKey];
+          for (let i = lo; i <= hi; i++) {
+            if (i === dragSource.rowIdx) continue;
+            next[i] = { ...next[i], [dragSource.colKey]: srcVal };
+          }
+          return next;
+        });
+        setSaved(false);
+      }
+      setDragSource(null);
+      setDragEndRow(null);
+      dragEndRowRef.current = null;
+    };
+    document.addEventListener("mouseup", onUp);
+    return () => document.removeEventListener("mouseup", onUp);
+  }, [dragSource]);
 
   const calc = useMemo<EolCalcRow[]>(() => {
     const endYear = settings.birthYear + settings.endAge;
@@ -361,9 +391,19 @@ export function EolClient({
             <tbody>
               {calc.map((row, idx) => {
                 const isFireYear = fireAge === row.age;
+                const inDragRange = dragSource !== null && dragEndRow !== null &&
+                  dragSource.colKey === (focusedCell?.colKey ?? dragSource.colKey) &&
+                  idx > Math.min(dragSource.rowIdx, dragEndRow) &&
+                  idx <= Math.max(dragSource.rowIdx, dragEndRow);
                 return (
                   <tr
                     key={row.year}
+                    onMouseEnter={() => {
+                      if (dragSource) {
+                        dragEndRowRef.current = idx;
+                        setDragEndRow(idx);
+                      }
+                    }}
                     className={
                       "border-b transition-colors " +
                       (isFireYear
@@ -377,8 +417,12 @@ export function EolClient({
                     <td className="py-1 pr-3 font-mono tabular-nums text-zinc-500">{row.age}</td>
 
                     {/* Editable input cells */}
-                    {ROW_COLS.map((col) => (
-                      <td key={col.key} className="py-0.5 pr-2" style={{ minWidth: col.width }}>
+                    {ROW_COLS.map((col) => {
+                      const isFocused = focusedCell?.rowIdx === idx && focusedCell?.colKey === col.key;
+                      const isDragCol = dragSource?.colKey === col.key;
+                      const highlight = isDragCol && inDragRange;
+                      return (
+                      <td key={col.key} className={"relative py-0.5 pr-2 " + (highlight ? "bg-blue-50 dark:bg-blue-950/30" : "")} style={{ minWidth: col.width }}>
                         <input
                           type={col.type === "text" ? "text" : "number"}
                           step={col.step ?? 1}
@@ -388,6 +432,8 @@ export function EolClient({
                               : (rows[idx]?.[col.key] ?? "")
                           }
                           placeholder={col.type === "text" ? "" : col.key === "monthlyColOverride" ? String(Math.round(settings.defaultMonthlyCoL)) : "0"}
+                          onFocus={() => setFocusedCell({ rowIdx: idx, colKey: col.key })}
+                          onBlur={() => { if (!dragSource) setFocusedCell(null); }}
                           onChange={(e) => {
                             const v: string | number | undefined =
                               col.type === "text"
@@ -398,10 +444,24 @@ export function EolClient({
                             updateRow(idx, col.key, v);
                           }}
                           onPaste={(e) => handleCellPaste(e, idx, col.key)}
-                          className="w-full rounded border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-zinc-400 dark:focus:border-zinc-500 bg-transparent px-1.5 py-0.5 text-xs font-mono outline-none transition-colors"
+                          className={"w-full rounded border bg-transparent px-1.5 py-0.5 text-xs font-mono outline-none transition-colors " + (isFocused ? "border-zinc-400 dark:border-zinc-500" : "border-transparent hover:border-zinc-200 dark:hover:border-zinc-700")}
+                          style={{ userSelect: dragSource ? "none" : undefined }}
                         />
+                        {isFocused && !dragSource && (
+                          <div
+                            title="Drag to fill down"
+                            className="absolute bottom-0 right-1 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20 select-none"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setDragSource({ rowIdx: idx, colKey: col.key });
+                              dragEndRowRef.current = idx;
+                              setDragEndRow(idx);
+                            }}
+                          />
+                        )}
                       </td>
-                    ))}
+                      );
+                    })}
 
                     {/* Calculated cells */}
                     <td className="py-1 pr-3 text-right font-mono tabular-nums">{fmt(row.activeIncome)}</td>
