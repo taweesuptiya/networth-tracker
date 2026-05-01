@@ -67,7 +67,7 @@ export function EolClient({
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [focusedCell, setFocusedCell] = useState<{ rowIdx: number; colKey: keyof EolRowInput } | null>(null);
+  const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colKey: keyof EolRowInput } | null>(null);
   const [dragSource, setDragSource] = useState<{ rowIdx: number; colKey: keyof EolRowInput } | null>(null);
   const [dragEndRow, setDragEndRow] = useState<number | null>(null);
   const dragEndRowRef = useRef<number | null>(null);
@@ -388,24 +388,25 @@ export function EolClient({
                 <th className="text-right py-1.5 font-medium text-zinc-500 whitespace-nowrap">Net Worth</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody
+              onMouseLeave={() => {
+                if (dragSource) { dragEndRowRef.current = dragSource.rowIdx; setDragEndRow(dragSource.rowIdx); }
+              }}
+            >
               {calc.map((row, idx) => {
                 const isFireYear = fireAge === row.age;
                 const inDragRange = dragSource !== null && dragEndRow !== null &&
-                  dragSource.colKey === (focusedCell?.colKey ?? dragSource.colKey) &&
-                  idx > Math.min(dragSource.rowIdx, dragEndRow) &&
-                  idx <= Math.max(dragSource.rowIdx, dragEndRow);
+                  idx >= Math.min(dragSource.rowIdx, dragEndRow) &&
+                  idx <= Math.max(dragSource.rowIdx, dragEndRow) &&
+                  idx !== dragSource.rowIdx;
                 return (
                   <tr
                     key={row.year}
                     onMouseEnter={() => {
-                      if (dragSource) {
-                        dragEndRowRef.current = idx;
-                        setDragEndRow(idx);
-                      }
+                      if (dragSource) { dragEndRowRef.current = idx; setDragEndRow(idx); }
                     }}
                     className={
-                      "border-b transition-colors " +
+                      "border-b " +
                       (isFireYear
                         ? "bg-green-50 dark:bg-green-950/30"
                         : idx % 2 === 0
@@ -416,50 +417,84 @@ export function EolClient({
                     <td className="py-1 pr-3 font-mono tabular-nums sticky left-0 bg-inherit z-10">{row.year}</td>
                     <td className="py-1 pr-3 font-mono tabular-nums text-zinc-500">{row.age}</td>
 
-                    {/* Editable input cells */}
+                    {/* Spreadsheet-style cells: display value, click to edit */}
                     {ROW_COLS.map((col) => {
-                      const isFocused = focusedCell?.rowIdx === idx && focusedCell?.colKey === col.key;
-                      const isDragCol = dragSource?.colKey === col.key;
-                      const highlight = isDragCol && inDragRange;
+                      const isSelected = selectedCell?.rowIdx === idx && selectedCell?.colKey === col.key;
+                      const isDragSource = dragSource?.rowIdx === idx && dragSource?.colKey === col.key;
+                      const isDragHighlight = dragSource?.colKey === col.key && inDragRange;
+                      const rawVal = col.key === "monthlyColOverride"
+                        ? rows[idx]?.monthlyColOverride
+                        : rows[idx]?.[col.key];
+                      const displayVal = rawVal == null || rawVal === ""
+                        ? ""
+                        : col.type !== "text"
+                        ? Number(rawVal).toLocaleString("en-US")
+                        : String(rawVal);
                       return (
-                      <td key={col.key} className={"relative py-0.5 pr-2 " + (highlight ? "bg-blue-50 dark:bg-blue-950/30" : "")} style={{ minWidth: col.width }}>
-                        <input
-                          type={col.type === "text" ? "text" : "number"}
-                          step={col.step ?? 1}
-                          value={
-                            col.key === "monthlyColOverride"
-                              ? (rows[idx]?.monthlyColOverride ?? "")
-                              : (rows[idx]?.[col.key] ?? "")
+                        <td
+                          key={col.key}
+                          className={
+                            "relative p-0 " +
+                            (isDragHighlight ? "bg-blue-100 dark:bg-blue-900/30" : "") +
+                            (isDragSource ? " outline outline-2 outline-blue-500" : "")
                           }
-                          placeholder={col.type === "text" ? "" : col.key === "monthlyColOverride" ? String(Math.round(settings.defaultMonthlyCoL)) : "0"}
-                          onFocus={() => setFocusedCell({ rowIdx: idx, colKey: col.key })}
-                          onBlur={() => { if (!dragSource) setFocusedCell(null); }}
-                          onChange={(e) => {
-                            const v: string | number | undefined =
-                              col.type === "text"
-                                ? e.target.value
-                                : col.key === "monthlyColOverride"
-                                ? e.target.value === "" ? undefined : parseFloat(e.target.value) || 0
-                                : parseFloat(e.target.value) || 0;
-                            updateRow(idx, col.key, v);
-                          }}
-                          onPaste={(e) => handleCellPaste(e, idx, col.key)}
-                          className={"w-full rounded border bg-transparent px-1.5 py-0.5 text-xs font-mono outline-none transition-colors " + (isFocused ? "border-zinc-400 dark:border-zinc-500" : "border-transparent hover:border-zinc-200 dark:hover:border-zinc-700")}
-                          style={{ userSelect: dragSource ? "none" : undefined }}
-                        />
-                        {isFocused && !dragSource && (
-                          <div
-                            title="Drag to fill down"
-                            className="absolute bottom-0 right-1 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20 select-none"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setDragSource({ rowIdx: idx, colKey: col.key });
-                              dragEndRowRef.current = idx;
-                              setDragEndRow(idx);
-                            }}
-                          />
-                        )}
-                      </td>
+                          style={{ minWidth: col.width, height: "28px" }}
+                          onClick={() => { if (!isSelected) setSelectedCell({ rowIdx: idx, colKey: col.key }); }}
+                        >
+                          {isSelected ? (
+                            <input
+                              autoFocus
+                              type={col.type === "text" ? "text" : "number"}
+                              step={col.step ?? 1}
+                              defaultValue={rawVal ?? ""}
+                              placeholder={col.key === "monthlyColOverride" ? String(Math.round(settings.defaultMonthlyCoL)) : ""}
+                              onChange={(e) => {
+                                const v: string | number | undefined =
+                                  col.type === "text"
+                                    ? e.target.value
+                                    : col.key === "monthlyColOverride"
+                                    ? e.target.value === "" ? undefined : parseFloat(e.target.value) || 0
+                                    : parseFloat(e.target.value) || 0;
+                                updateRow(idx, col.key, v);
+                              }}
+                              onPaste={(e) => handleCellPaste(e, idx, col.key)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === "Escape") setSelectedCell(null);
+                                if (e.key === "Tab") {
+                                  e.preventDefault();
+                                  const colIdx = ROW_COLS.findIndex((c) => c.key === col.key);
+                                  const nextCol = ROW_COLS[colIdx + (e.shiftKey ? -1 : 1)];
+                                  if (nextCol) setSelectedCell({ rowIdx: idx, colKey: nextCol.key });
+                                  else setSelectedCell({ rowIdx: idx + (e.shiftKey ? -1 : 1), colKey: ROW_COLS[e.shiftKey ? ROW_COLS.length - 1 : 0].key });
+                                }
+                              }}
+                              onBlur={(e) => {
+                                if (!e.relatedTarget || !(e.relatedTarget as HTMLElement).dataset.fillHandle) {
+                                  setSelectedCell(null);
+                                }
+                              }}
+                              className="absolute inset-0 w-full h-full px-1.5 text-xs font-mono bg-white dark:bg-zinc-900 border-2 border-blue-500 outline-none z-10"
+                            />
+                          ) : (
+                            <div className="px-1.5 py-1 text-xs font-mono truncate text-right select-none cursor-default">
+                              {col.type === "text" ? <span className="text-left block">{displayVal}</span> : displayVal}
+                            </div>
+                          )}
+                          {/* Fill handle — shown on selected cell */}
+                          {isSelected && (
+                            <div
+                              data-fill-handle="1"
+                              title="Drag to fill down"
+                              className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 cursor-crosshair z-20"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setDragSource({ rowIdx: idx, colKey: col.key });
+                                dragEndRowRef.current = idx;
+                                setDragEndRow(idx);
+                              }}
+                            />
+                          )}
+                        </td>
                       );
                     })}
 
