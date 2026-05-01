@@ -22,6 +22,9 @@ export type EolSettings = {
   defaultTaxRate: number;
   defaultMonthlyCoL: number;
   colGrowthRate: number;
+  globalMonthlySalary: number;
+  globalSalaryUpliftPct: number;
+  sharePriceCurrency: string;
 };
 
 export type EolConfig = EolSettings & { rows: EolRowInput[] };
@@ -54,6 +57,9 @@ export const DEFAULT_EOL_SETTINGS: EolSettings = {
   defaultTaxRate: 16,
   defaultMonthlyCoL: 60_000,
   colGrowthRate: 0,
+  globalMonthlySalary: 0,
+  globalSalaryUpliftPct: 5,
+  sharePriceCurrency: "USD",
 };
 
 export function initRows(settings: EolSettings): EolRowInput[] {
