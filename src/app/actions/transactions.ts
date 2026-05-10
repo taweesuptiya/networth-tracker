@@ -40,14 +40,23 @@ function dupKey(t: { occurred_at: string; amount: number; direction: string }) {
 export async function checkForDuplicates(
   workspaceId: string,
   candidates: { occurred_at: string; amount: number; direction: string; description: string }[]
-): Promise<boolean[]> {
-  if (candidates.length === 0) return [];
+): Promise<{ flags: boolean[]; existingCount: number }> {
+  if (candidates.length === 0) return { flags: [], existingCount: 0 };
   const supabase = await createClient();
+
+  // Verify auth — if not authenticated Supabase returns 0 rows silently due to RLS.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    console.error("[dupcheck] not authenticated — returning no dups");
+    return { flags: candidates.map(() => false), existingCount: -1 };
+  }
+
   // Slice to "YYYY-MM-DD" so Postgres date comparison works regardless of what format
   // Supabase or Claude returns (could include a time/timezone component).
   const dates = candidates.map((c) => String(c.occurred_at).slice(0, 10)).sort();
   const from = dates[0];
   const to = dates[dates.length - 1];
+
   const { data: existing, error: fetchErr } = await supabase
     .from("transactions")
     .select("occurred_at, amount, direction")
@@ -55,7 +64,15 @@ export async function checkForDuplicates(
     .gte("occurred_at", from)
     .lte("occurred_at", to)
     .limit(10000);
-  if (fetchErr) console.error("checkForDuplicates fetch error:", fetchErr.message);
+
+  if (fetchErr) console.error("[dupcheck] fetch error:", fetchErr.message);
+
+  const existingCount = existing?.length ?? 0;
+  console.log(
+    `[dupcheck] uid=${user.id.slice(0, 8)} ws=${workspaceId.slice(0, 8)} ` +
+    `range=${from}→${to} db_rows=${existingCount} candidates=${candidates.length}`
+  );
+
   const existingKeys = new Set(
     (existing ?? []).map((e) =>
       dupKey({
@@ -65,7 +82,18 @@ export async function checkForDuplicates(
       })
     )
   );
-  return candidates.map((c) => existingKeys.has(dupKey(c)));
+
+  // Debug: log a few key samples so we can see if they match
+  if (existingCount > 0 && candidates.length > 0) {
+    const sampleExisting = Array.from(existingKeys).slice(0, 3).join(" | ");
+    const sampleCand = candidates.slice(0, 3).map((c) => dupKey(c)).join(" | ");
+    console.log(`[dupcheck] sample existing keys: ${sampleExisting}`);
+    console.log(`[dupcheck] sample candidate keys: ${sampleCand}`);
+  }
+
+  const flags = candidates.map((c) => existingKeys.has(dupKey(c)));
+  console.log(`[dupcheck] detected ${flags.filter(Boolean).length} dups`);
+  return { flags, existingCount };
 }
 
 export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
@@ -78,7 +106,7 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
     direction: t.direction,
     description: t.description,
   }));
-  const dupFlags = await checkForDuplicates(workspaceId, candidates);
+  const { flags: dupFlags } = await checkForDuplicates(workspaceId, candidates);
   const filtered = txs.filter((_, i) => !dupFlags[i]);
   const skipped = txs.length - filtered.length;
 

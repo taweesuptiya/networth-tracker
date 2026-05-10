@@ -133,6 +133,7 @@ export function StatementUploader({
   const [skippedDup, setSkippedDup] = useState<number>(0);
   const [progress, setProgress] = useState<string>("");
   const [dupes, setDupes] = useState<boolean[]>([]);
+  const [dupDbCount, setDupDbCount] = useState<number>(0);
   const [localAssets, setLocalAssets] = useState<AssetRef[]>(assets);
   // Per-row inline new-asset form state
   const [newAssetRow, setNewAssetRow] = useState<number | null>(null);
@@ -164,6 +165,7 @@ export function StatementUploader({
     setParsed(null);
     setClassified([]);
     setCommitted(null);
+    setDupDbCount(0);
     if (!file) return;
     if (!selectedAccount) {
       setError("Please select an account first (or add one in Accounts & rules).");
@@ -209,7 +211,7 @@ export function StatementUploader({
 
       // Check duplicates against DB
       setProgress("Checking for duplicates...");
-      const dupFlags = await checkForDuplicates(
+      const dupResult = await checkForDuplicates(
         workspaceId,
         cls.map((t) => ({
           occurred_at: t.date,
@@ -218,9 +220,10 @@ export function StatementUploader({
           description: t.description,
         }))
       );
-      setDupes(dupFlags);
+      setDupes(dupResult.flags);
+      setDupDbCount(dupResult.existingCount);
       // Auto-select all non-duplicates only
-      setSelected(new Set(cls.map((_, i) => i).filter((i) => !dupFlags[i])));
+      setSelected(new Set(cls.map((_, i) => i).filter((i) => !dupResult.flags[i])));
 
       // Pre-populate per-card account map: try to auto-match by last4
       const cardSet = new Set<string>();
@@ -447,6 +450,11 @@ export function StatementUploader({
             <span>
               Period: {parsed.period.start} → {parsed.period.end} · Currency: {parsed.currency}
               {parsed.account_number ? ` · Account ${parsed.account_number}` : ""}
+              {dupDbCount >= 0 && (
+                <span className="ml-3 text-zinc-400">
+                  · {dupDbCount} existing in DB
+                </span>
+              )}
               {dupes.filter(Boolean).length > 0 && (
                 <span className="ml-3 text-oxblood">
                   · {dupes.filter(Boolean).length} duplicate{dupes.filter(Boolean).length === 1 ? "" : "s"} detected
