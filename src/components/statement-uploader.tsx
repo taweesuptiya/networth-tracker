@@ -542,8 +542,8 @@ export function StatementUploader({
               </div>
             </div>
           )}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-3 max-h-[60vh] overflow-y-auto">
-            <table className="w-full text-xs">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto overflow-y-auto mb-3 max-h-[60vh]">
+            <table className="w-max min-w-full text-xs">
               <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500 sticky top-0 z-10">
                 <tr>
                   <th className="px-3 py-2 w-8">
