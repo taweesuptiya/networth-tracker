@@ -19,10 +19,10 @@ export type AssetInput = {
 
 export async function createAsset(input: AssetInput) {
   const supabase = await createClient();
-  const { error } = await supabase.from("assets").insert(input);
-  if (error) return { error: error.message };
+  const { error, data } = await supabase.from("assets").insert(input).select("id").single();
+  if (error) return { error: error.message, id: null as string | null };
   revalidatePath("/");
-  return { error: null };
+  return { error: null, id: data.id as string };
 }
 
 export async function updateAsset(id: string, input: Partial<AssetInput>) {

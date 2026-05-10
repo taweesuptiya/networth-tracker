@@ -718,15 +718,14 @@ export function StatementUploader({
                                     price_source: "manual",
                                   });
                                   setCreatingAsset(false);
-                                  if (!res.error) {
-                                    // Reload assets list by re-fetching via router soft refresh
-                                    // and optimistically add to local list
-                                    const tempId = `new-${Date.now()}`;
-                                    const created: AssetRef = { id: tempId, name: newAssetName.trim(), type: newAssetType };
+                                  if (!res.error && res.id) {
+                                    const created: AssetRef = { id: res.id, name: newAssetName.trim(), type: newAssetType };
                                     setLocalAssets((prev) => [...prev, created]);
-                                    setTargetAsset({ ...targetAsset, [i]: tempId });
+                                    setTargetAsset({ ...targetAsset, [i]: res.id });
                                     setNewAssetRow(null);
                                     router.refresh();
+                                  } else if (res.error) {
+                                    alert(`Failed to create asset: ${res.error}`);
                                   }
                                 }}
                                 className="px-2 py-0.5 text-xs rounded bg-zinc-900 text-white disabled:opacity-50"

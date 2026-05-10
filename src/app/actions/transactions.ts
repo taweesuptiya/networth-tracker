@@ -30,7 +30,11 @@ export type CommitTx = {
 };
 
 function dupKey(t: { occurred_at: string; amount: number; direction: string }) {
-  return `${t.occurred_at}|${Math.round(Number(t.amount) * 100) / 100}|${t.direction}`;
+  // Slice to 10 chars normalises both "YYYY-MM-DD" and "YYYY-MM-DDThh:mm:ss±hh:mm" from Supabase.
+  // Integer cents avoids floating-point drift when rebuilding the float for the key string.
+  const date = String(t.occurred_at).slice(0, 10);
+  const cents = Math.round(Number(t.amount) * 100);
+  return `${date}|${cents}|${t.direction}`;
 }
 
 export async function checkForDuplicates(
@@ -39,16 +43,19 @@ export async function checkForDuplicates(
 ): Promise<boolean[]> {
   if (candidates.length === 0) return [];
   const supabase = await createClient();
-  const dates = candidates.map((c) => c.occurred_at).sort();
+  // Slice to "YYYY-MM-DD" so Postgres date comparison works regardless of what format
+  // Supabase or Claude returns (could include a time/timezone component).
+  const dates = candidates.map((c) => String(c.occurred_at).slice(0, 10)).sort();
   const from = dates[0];
   const to = dates[dates.length - 1];
-  const { data: existing } = await supabase
+  const { data: existing, error: fetchErr } = await supabase
     .from("transactions")
     .select("occurred_at, amount, direction")
     .eq("workspace_id", workspaceId)
     .gte("occurred_at", from)
     .lte("occurred_at", to)
     .limit(10000);
+  if (fetchErr) console.error("checkForDuplicates fetch error:", fetchErr.message);
   const existingKeys = new Set(
     (existing ?? []).map((e) =>
       dupKey({
