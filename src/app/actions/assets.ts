@@ -44,6 +44,17 @@ export async function deleteAsset(id: string) {
   return { error: null };
 }
 
+export async function updateLinkedAssetBalance(assetId: string, balance: number) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("assets")
+    .update({ manual_value: balance, updated_at: new Date().toISOString() })
+    .eq("id", assetId);
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  return { error: null };
+}
+
 export async function updateFxRate(workspaceId: string, usdToThb: number) {
   const supabase = await createClient();
   const { error } = await supabase

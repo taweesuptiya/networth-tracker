@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { commitTransactions, checkForDuplicates, type CommitTx } from "@/app/actions/transactions";
 import { createRule } from "@/app/actions/accounts";
-import { createAsset } from "@/app/actions/assets";
+import { createAsset, updateLinkedAssetBalance } from "@/app/actions/assets";
 import { classify, type Rule, type ClassifiedTx } from "@/lib/tx-rules";
 
 type ParsedTx = {
@@ -22,6 +22,7 @@ type ParseResult = {
   currency: string;
   account_holder: string | null;
   account_number: string | null;
+  ending_balance: number | null;
   transactions: ParsedTx[];
 };
 
@@ -32,6 +33,7 @@ type Account = {
   name: string;
   type: "savings" | "credit_card" | "cash";
   last4?: string | null;
+  linked_asset_id?: string | null;
 };
 
 const TX_TYPES = [
@@ -312,6 +314,12 @@ export function StatementUploader({
       const res = await commitTransactions(workspaceId, txs);
       if (res.error) setError(res.error);
       else {
+        // Auto-sync ending balance to linked NW asset for savings/cash accounts
+        const linkedAsset = selectedAccount.linked_asset_id;
+        const endingBal = parsed?.ending_balance;
+        if (linkedAsset && endingBal != null) {
+          await updateLinkedAssetBalance(linkedAsset, endingBal);
+        }
         setCommitted(res.count);
         setSkippedDup(res.skipped ?? 0);
         setParsed(null);

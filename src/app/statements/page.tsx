@@ -26,7 +26,7 @@ export default async function StatementsPage() {
 
   const { data: accounts } = await supabase
     .from("accounts")
-    .select("id, name, type")
+    .select("id, name, type, last4, linked_asset_id")
     .order("name");
 
   // Assets across all workspaces (for asset_buy dropdown — typically RMF/Stock are in Personal)

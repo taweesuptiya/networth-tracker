@@ -63,6 +63,17 @@ export async function saveAiInstructions(workspaceId: string, instructions: stri
   return { error: null };
 }
 
+export async function linkAccountToAsset(accountId: string, assetId: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("accounts")
+    .update({ linked_asset_id: assetId })
+    .eq("id", accountId);
+  if (error) return { error: error.message };
+  revalidatePath("/accounts");
+  return { error: null };
+}
+
 export async function seedDefaultRules(workspaceId: string) {
   const supabase = await createClient();
   const rows = defaultRules.map((r) => ({ ...r, workspace_id: workspaceId, enabled: true }));
