@@ -85,7 +85,7 @@ export function AssetForm({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6 overflow-y-auto max-h-[90vh]">
         <h2 className="text-lg font-semibold mb-4">
           {data.id ? "Edit asset" : "Add asset"}
         </h2>
