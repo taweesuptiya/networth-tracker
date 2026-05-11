@@ -33,10 +33,26 @@ export default async function AccountsPage({
 
   const { data: accountRows } = await supabase
     .from("accounts")
-    .select("id, name, type, last4, notes")
+    .select("id, name, type, last4, notes, linked_asset_id")
     .eq("workspace_id", active.id)
     .order("name");
-  const accounts: Account[] = accountRows ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const accounts: Account[] = (accountRows ?? []).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    last4: r.last4 ?? null,
+    notes: r.notes ?? null,
+    linked_asset_id: r.linked_asset_id ?? null,
+  }));
+
+  const { data: assetRows } = await supabase
+    .from("assets")
+    .select("id, name, type")
+    .eq("workspace_id", active.id)
+    .order("name");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assets = (assetRows ?? []).map((r: any) => ({ id: r.id as string, name: r.name as string, type: r.type as string }));
 
   const { data: ruleRows } = await supabase
     .from("tx_rules")
@@ -54,7 +70,7 @@ export default async function AccountsPage({
         </div>
       </header>
       <main className="flex-1 px-6 py-8 max-w-5xl w-full mx-auto">
-        <AccountsManager workspaceId={active.id} accounts={accounts} />
+        <AccountsManager workspaceId={active.id} accounts={accounts} assets={assets} />
         <AiInstructionsManager
           workspaceId={active.id}
           initial={(active as { ai_categorization_instructions?: string }).ai_categorization_instructions ?? ""}

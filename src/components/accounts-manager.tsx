@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createAccount, deleteAccount } from "@/app/actions/accounts";
+import { createAccount, deleteAccount, linkAccountToAsset } from "@/app/actions/accounts";
 
 export type Account = {
   id: string;
@@ -9,14 +9,19 @@ export type Account = {
   type: "savings" | "credit_card" | "cash";
   last4: string | null;
   notes: string | null;
+  linked_asset_id: string | null;
 };
+
+type AssetRef = { id: string; name: string; type: string };
 
 export function AccountsManager({
   workspaceId,
   accounts,
+  assets,
 }: {
   workspaceId: string;
   accounts: Account[];
+  assets: AssetRef[];
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<Account["type"]>("savings");
@@ -43,12 +48,20 @@ export function AccountsManager({
     });
   }
 
-  function onDel(id: string, name: string) {
-    if (!confirm(`Delete account "${name}"?`)) return;
+  function onDel(id: string, aName: string) {
+    if (!confirm(`Delete account "${aName}"?`)) return;
     startTransition(async () => {
       await deleteAccount(id);
     });
   }
+
+  function onLinkAsset(accountId: string, assetId: string) {
+    startTransition(async () => {
+      await linkAccountToAsset(accountId, assetId || null);
+    });
+  }
+
+  const cashAssets = assets.filter((a) => a.type === "Cash");
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 mb-6">
@@ -60,17 +73,35 @@ export function AccountsManager({
           accounts.map((a) => (
             <div
               key={a.id}
-              className="flex justify-between items-center text-xs px-3 py-2 rounded border border-zinc-200 dark:border-zinc-800"
+              className="flex justify-between items-center text-xs px-3 py-2 rounded border border-zinc-200 dark:border-zinc-800 gap-3"
             >
-              <div className="flex items-center gap-3">
-                <span className="font-medium">{a.name}</span>
-                <span className="text-zinc-500">{a.type}</span>
-                {a.last4 && <span className="text-zinc-400 font-mono">····{a.last4}</span>}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="font-medium truncate">{a.name}</span>
+                <span className="text-zinc-500 shrink-0">{a.type}</span>
+                {a.last4 && <span className="text-zinc-400 font-mono shrink-0">····{a.last4}</span>}
               </div>
+              {a.type !== "credit_card" && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-zinc-400">→ NW asset:</span>
+                  <select
+                    value={a.linked_asset_id ?? ""}
+                    onChange={(e) => onLinkAsset(a.id, e.target.value)}
+                    disabled={pending}
+                    className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-1.5 py-0.5 text-xs max-w-36"
+                  >
+                    <option value="">— none —</option>
+                    {cashAssets.map((ast) => (
+                      <option key={ast.id} value={ast.id}>
+                        {ast.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <button
                 onClick={() => onDel(a.id, a.name)}
                 disabled={pending}
-                className="text-red-500 hover:text-red-600"
+                className="text-red-500 hover:text-red-600 shrink-0"
               >
                 Delete
               </button>
@@ -110,6 +141,11 @@ export function AccountsManager({
         </button>
       </form>
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+      {cashAssets.length === 0 && accounts.some((a) => a.type !== "credit_card") && (
+        <p className="mt-2 text-xs text-zinc-400">
+          No Cash assets found. Add a Cash-type asset on the dashboard to enable auto-balance sync.
+        </p>
+      )}
     </div>
   );
 }

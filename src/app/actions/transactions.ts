@@ -12,7 +12,8 @@ export type TxType =
   | "cc_payment"
   | "cc_payment_received"
   | "reimbursement"
-  | "asset_buy";
+  | "asset_buy"
+  | "loan_repayment";
 
 export type CommitTx = {
   occurred_at: string;
@@ -30,18 +31,27 @@ export type CommitTx = {
 };
 
 function dupKey(t: { occurred_at: string; amount: number; direction: string }) {
-  return `${t.occurred_at}|${Math.round(Number(t.amount) * 100) / 100}|${t.direction}`;
+  // Slice to 10 chars normalises both "YYYY-MM-DD" and "YYYY-MM-DDThh:mm:ss±hh:mm" from Supabase.
+  // Integer cents avoids floating-point drift when rebuilding the float for the key string.
+  const date = String(t.occurred_at).slice(0, 10);
+  const cents = Math.round(Number(t.amount) * 100);
+  return `${date}|${cents}|${t.direction}`;
 }
 
 export async function checkForDuplicates(
   workspaceId: string,
   candidates: { occurred_at: string; amount: number; direction: string; description: string }[]
-): Promise<boolean[]> {
-  if (candidates.length === 0) return [];
+): Promise<{ flags: boolean[]; existingCount: number }> {
+  if (candidates.length === 0) return { flags: [], existingCount: 0 };
   const supabase = await createClient();
-  const dates = candidates.map((c) => c.occurred_at).sort();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { flags: candidates.map(() => false), existingCount: -1 };
+
+  const dates = candidates.map((c) => String(c.occurred_at).slice(0, 10)).sort();
   const from = dates[0];
   const to = dates[dates.length - 1];
+
   const { data: existing } = await supabase
     .from("transactions")
     .select("occurred_at, amount, direction")
@@ -49,6 +59,9 @@ export async function checkForDuplicates(
     .gte("occurred_at", from)
     .lte("occurred_at", to)
     .limit(10000);
+
+  const existingCount = existing?.length ?? 0;
+
   const existingKeys = new Set(
     (existing ?? []).map((e) =>
       dupKey({
@@ -58,7 +71,9 @@ export async function checkForDuplicates(
       })
     )
   );
-  return candidates.map((c) => existingKeys.has(dupKey(c)));
+
+  const flags = candidates.map((c) => existingKeys.has(dupKey(c)));
+  return { flags, existingCount };
 }
 
 export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
@@ -71,7 +86,7 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
     direction: t.direction,
     description: t.description,
   }));
-  const dupFlags = await checkForDuplicates(workspaceId, candidates);
+  const { flags: dupFlags } = await checkForDuplicates(workspaceId, candidates);
   const filtered = txs.filter((_, i) => !dupFlags[i]);
   const skipped = txs.length - filtered.length;
 
@@ -115,7 +130,6 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
 
     // Cross-workspace transfer → create paired transfer_in row
     if (t.tx_type === "transfer" && t.target_workspace_id) {
-      // Verify target workspace owned by user (RLS will also enforce, but explicit check is clearer)
       const { data: ws } = await supabase
         .from("workspaces")
         .select("id")
@@ -136,7 +150,7 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
           direction: "credit",
           category: t.category ?? null,
           tx_type: "transfer_in",
-          account_id: t.account_id ?? null, // preserve source account so Marriage can see "from KBANK"
+          account_id: t.account_id ?? null,
           linked_tx_id: sourceId,
         })
         .select("id")
@@ -145,7 +159,6 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
         errors.push(`Pair insert failed: ${pairErr?.message}`);
         continue;
       }
-      // Back-link source row to pair
       await supabase
         .from("transactions")
         .update({ linked_tx_id: pair.id })
@@ -170,12 +183,30 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
         else assetUpdates++;
       }
     }
+
+    // Loan repayment → reduce asset.debt_balance by units_delta (principal portion)
+    if (t.tx_type === "loan_repayment" && t.target_asset_id && t.units_delta != null) {
+      const { data: asset } = await supabase
+        .from("assets")
+        .select("debt_balance")
+        .eq("id", t.target_asset_id)
+        .maybeSingle();
+      if (asset) {
+        const newDebt = Math.max(0, Number(asset.debt_balance ?? 0) - Number(t.units_delta));
+        const { error: updErr } = await supabase
+          .from("assets")
+          .update({ debt_balance: newDebt, updated_at: new Date().toISOString() })
+          .eq("id", t.target_asset_id);
+        if (updErr) errors.push(`Debt update: ${updErr.message}`);
+        else assetUpdates++;
+      }
+    }
   }
 
+  revalidatePath("/");
   revalidatePath("/statements");
   revalidatePath("/transactions");
   revalidatePath("/projection");
-  revalidatePath("/");
 
   return {
     error: errors.length > 0 ? errors.join("; ") : null,
@@ -191,7 +222,6 @@ export async function updateTransaction(
   patch: {
     tx_type?: string;
     category?: string | null;
-    account_id?: string | null;
     description?: string;
     amount?: number;
     occurred_at?: string;
@@ -199,7 +229,6 @@ export async function updateTransaction(
 ) {
   const supabase = await createClient();
 
-  // Fetch current row to detect side effects (paired + asset_buy)
   const { data: current } = await supabase
     .from("transactions")
     .select(
@@ -242,7 +271,7 @@ export async function deleteTransactions(ids: string[]) {
   if (ids.length === 0) return { error: null, count: 0 };
   const supabase = await createClient();
 
-  // Reverse asset buys + collect linked pair ids
+  // Reverse asset buys + loan repayments + collect linked pair ids
   const { data: rows } = await supabase
     .from("transactions")
     .select("id, tx_type, target_asset_id, units_delta, linked_tx_id")
@@ -263,6 +292,19 @@ export async function deleteTransactions(ids: string[]) {
           .eq("id", r.target_asset_id);
       }
     }
+    if (r.tx_type === "loan_repayment" && r.target_asset_id && r.units_delta != null) {
+      const { data: asset } = await supabase
+        .from("assets")
+        .select("debt_balance")
+        .eq("id", r.target_asset_id)
+        .maybeSingle();
+      if (asset) {
+        await supabase
+          .from("assets")
+          .update({ debt_balance: Number(asset.debt_balance ?? 0) + Number(r.units_delta) })
+          .eq("id", r.target_asset_id);
+      }
+    }
     if (r.linked_tx_id) allToDelete.add(r.linked_tx_id as string);
   }
 
@@ -273,9 +315,9 @@ export async function deleteTransactions(ids: string[]) {
     .select("id");
   if (error) return { error: error.message, count: 0 };
 
+  revalidatePath("/");
   revalidatePath("/transactions");
   revalidatePath("/projection");
-  revalidatePath("/");
   return { error: null, count: data?.length ?? allToDelete.size };
 }
 

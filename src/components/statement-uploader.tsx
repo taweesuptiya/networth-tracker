@@ -22,6 +22,7 @@ type ParseResult = {
   currency: string;
   account_holder: string | null;
   account_number: string | null;
+  ending_balance: number | null;
   transactions: ParsedTx[];
 };
 
@@ -32,6 +33,7 @@ type Account = {
   name: string;
   type: "savings" | "credit_card" | "cash";
   last4?: string | null;
+  linked_asset_id?: string | null;
 };
 
 const TX_TYPES = [
@@ -40,6 +42,7 @@ const TX_TYPES = [
   "transfer",
   "transfer_in",
   "asset_buy",
+  "loan_repayment",
   "cc_payment",
   "cc_payment_received",
   "reimbursement",
@@ -166,6 +169,7 @@ export function StatementUploader({
     setParsed(null);
     setClassified([]);
     setCommitted(null);
+    setDupDbCount(0);
     if (!file) return;
     if (!selectedAccount) {
       setError("Please select an account first (or add one in Accounts & rules).");
@@ -211,7 +215,7 @@ export function StatementUploader({
 
       // Check duplicates against DB
       setProgress("Checking for duplicates...");
-      const dupFlags = await checkForDuplicates(
+      const dupResult = await checkForDuplicates(
         workspaceId,
         cls.map((t) => ({
           occurred_at: t.date,
@@ -220,9 +224,10 @@ export function StatementUploader({
           description: t.description,
         }))
       );
-      setDupes(dupFlags);
+      setDupes(dupResult.flags);
+      setDupDbCount(dupResult.existingCount);
       // Auto-select all non-duplicates only
-      setSelected(new Set(cls.map((_, i) => i).filter((i) => !dupFlags[i])));
+      setSelected(new Set(cls.map((_, i) => i).filter((i) => !dupResult.flags[i])));
 
       // Pre-populate per-card account map: try to auto-match by last4
       const cardSet = new Set<string>();
@@ -304,9 +309,11 @@ export function StatementUploader({
           target_workspace_id:
             t.tx_type === "transfer" && targetWs[i] ? targetWs[i] : null,
           target_asset_id:
-            t.tx_type === "asset_buy" && targetAsset[i] ? targetAsset[i] : null,
+            (t.tx_type === "asset_buy" || t.tx_type === "loan_repayment") && targetAsset[i]
+              ? targetAsset[i]
+              : null,
           units_delta:
-            t.tx_type === "asset_buy" && unitsDelta[i]
+            (t.tx_type === "asset_buy" || t.tx_type === "loan_repayment") && unitsDelta[i]
               ? Number(unitsDelta[i])
               : null,
         };
@@ -316,6 +323,12 @@ export function StatementUploader({
       const res = await commitTransactions(workspaceId, txs);
       if (res.error) setError(res.error);
       else {
+        // Auto-sync ending balance to linked NW asset for savings/cash accounts
+        const linkedAsset = selectedAccount.linked_asset_id;
+        const endingBal = parsed?.ending_balance;
+        if (linkedAsset && endingBal != null) {
+          await updateLinkedAssetBalance(linkedAsset, endingBal);
+        }
         setCommitted(res.count);
         setSkippedDup(res.skipped ?? 0);
         setParsed(null);
@@ -443,6 +456,11 @@ export function StatementUploader({
             <span>
               Period: {parsed.period.start} → {parsed.period.end} · Currency: {parsed.currency}
               {parsed.account_number ? ` · Account ${parsed.account_number}` : ""}
+              {dupDbCount >= 0 && (
+                <span className="ml-3 text-zinc-400">
+                  · {dupDbCount} existing in DB
+                </span>
+              )}
               {dupes.filter(Boolean).length > 0 && (
                 <span className="ml-3 text-oxblood">
                   · {dupes.filter(Boolean).length} duplicate{dupes.filter(Boolean).length === 1 ? "" : "s"} detected
@@ -723,6 +741,98 @@ export function StatementUploader({
                                     setTargetAsset({ ...targetAsset, [i]: tempId });
                                     setNewAssetRow(null);
                                     router.refresh();
+                                  }
+                                }}
+                                className="px-2 py-0.5 text-xs rounded bg-zinc-900 text-white disabled:opacity-50"
+                              >
+                                {creatingAsset ? "…" : "Create"}
+                              </button>
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {t.tx_type === "asset_buy" && (
+                        <span className="ml-1 flex flex-col gap-1">
+                          <span className="inline-flex gap-1 items-center">
+                            <select
+                              value={targetAsset[i] ?? ""}
+                              onChange={(e) => setTargetAsset({ ...targetAsset, [i]: e.target.value })}
+                              className="rounded border bg-transparent px-1 py-0.5 text-xs"
+                              title="Asset bought"
+                            >
+                              <option value="">— pick asset —</option>
+                              {localAssets
+                                .filter((a) => ["Stock", "Fund", "Crypto"].includes(a.type))
+                                .map((a) => (
+                                  <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                            </select>
+                            <input
+                              type="number"
+                              step="any"
+                              value={unitsDelta[i] ?? ""}
+                              onChange={(e) => setUnitsDelta({ ...unitsDelta, [i]: e.target.value })}
+                              placeholder="units"
+                              className="w-20 rounded border bg-transparent px-1 py-0.5 font-mono text-right text-xs"
+                            />
+                            <button
+                              className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                              onClick={() => { setNewAssetRow(newAssetRow === i ? null : i); setNewAssetName(""); setNewAssetSymbol(""); }}
+                            >
+                              {newAssetRow === i ? "✕ cancel" : "+ new"}
+                            </button>
+                          </span>
+                          {newAssetRow === i && (
+                            <span className="flex flex-wrap gap-1 items-center pl-1 border-l-2 border-blue-400">
+                              <input
+                                autoFocus
+                                placeholder="Asset name"
+                                value={newAssetName}
+                                onChange={(e) => setNewAssetName(e.target.value)}
+                                className="rounded border px-1 py-0.5 text-xs w-32 bg-transparent"
+                              />
+                              <select
+                                value={newAssetType}
+                                onChange={(e) => setNewAssetType(e.target.value as "Stock" | "Fund" | "Crypto")}
+                                className="rounded border px-1 py-0.5 text-xs bg-transparent"
+                              >
+                                <option>Stock</option>
+                                <option>Fund</option>
+                                <option>Crypto</option>
+                              </select>
+                              <input
+                                placeholder="Symbol (opt)"
+                                value={newAssetSymbol}
+                                onChange={(e) => setNewAssetSymbol(e.target.value)}
+                                className="rounded border px-1 py-0.5 text-xs w-24 bg-transparent font-mono uppercase"
+                              />
+                              <input
+                                placeholder="CCY"
+                                value={newAssetCurrency}
+                                onChange={(e) => setNewAssetCurrency(e.target.value.toUpperCase())}
+                                className="rounded border px-1 py-0.5 text-xs w-16 bg-transparent font-mono uppercase"
+                              />
+                              <button
+                                disabled={!newAssetName.trim() || creatingAsset}
+                                onClick={async () => {
+                                  setCreatingAsset(true);
+                                  const res = await createAsset({
+                                    workspace_id: workspaceId,
+                                    name: newAssetName.trim(),
+                                    type: newAssetType,
+                                    symbol: newAssetSymbol.trim() || null,
+                                    currency: newAssetCurrency.trim() || "USD",
+                                    price_source: "manual",
+                                  });
+                                  setCreatingAsset(false);
+                                  if (!res.error && res.id) {
+                                    const created: AssetRef = { id: res.id, name: newAssetName.trim(), type: newAssetType };
+                                    setLocalAssets((prev) => [...prev, created]);
+                                    setTargetAsset({ ...targetAsset, [i]: res.id });
+                                    setNewAssetRow(null);
+                                    router.refresh();
+                                  } else if (res.error) {
+                                    alert(`Failed to create asset: ${res.error}`);
                                   }
                                 }}
                                 className="px-2 py-0.5 text-xs rounded bg-zinc-900 text-white disabled:opacity-50"

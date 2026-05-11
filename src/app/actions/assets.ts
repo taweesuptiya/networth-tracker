@@ -13,16 +13,17 @@ export type AssetInput = {
   price_per_unit?: number | null;
   manual_value?: number | null;
   cost_basis?: number | null;
+  debt_balance?: number | null;
   currency: string;
   notes?: string | null;
 };
 
 export async function createAsset(input: AssetInput) {
   const supabase = await createClient();
-  const { error } = await supabase.from("assets").insert(input);
-  if (error) return { error: error.message };
+  const { error, data } = await supabase.from("assets").insert(input).select("id").single();
+  if (error) return { error: error.message, id: null as string | null };
   revalidatePath("/");
-  return { error: null };
+  return { error: null, id: data.id as string };
 }
 
 export async function updateAsset(id: string, input: Partial<AssetInput>) {
@@ -39,6 +40,17 @@ export async function updateAsset(id: string, input: Partial<AssetInput>) {
 export async function deleteAsset(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("assets").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  return { error: null };
+}
+
+export async function updateLinkedAssetBalance(assetId: string, balance: number) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("assets")
+    .update({ manual_value: balance, updated_at: new Date().toISOString() })
+    .eq("id", assetId);
   if (error) return { error: error.message };
   revalidatePath("/");
   return { error: null };

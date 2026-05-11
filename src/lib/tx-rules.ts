@@ -30,6 +30,7 @@ export type ClassifiedTx = ParsedTx & {
     | "transfer"
     | "transfer_in"
     | "asset_buy"
+    | "loan_repayment"
     | "cc_payment"
     | "cc_payment_received"
     | "reimbursement";
@@ -207,6 +208,7 @@ type StoredTx = {
   direction: "credit" | "debit";
   tx_type: string;
   category: string | null;
+  units_delta?: number | null;
 };
 
 export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
@@ -255,6 +257,24 @@ export function aggregateMonthly(txs: StoredTx[]): MonthlyTotals[] {
         );
         addNet(-amt);
         break;
+      case "loan_repayment": {
+        // Principal (units_delta) reduces debt — balance-sheet move, not P&L
+        // Interest (total payment − principal) is a real expense
+        const principal = Number(t.units_delta ?? 0);
+        const interest = Math.max(0, amt - principal);
+        if (interest > 0) {
+          const interestCat = t.category || "Loan Interest";
+          row.gross_expense_by_category.set(
+            interestCat,
+            (row.gross_expense_by_category.get(interestCat) ?? 0) + interest
+          );
+          row.expense_by_category.set(
+            interestCat,
+            (row.expense_by_category.get(interestCat) ?? 0) + interest
+          );
+        }
+        break;
+      }
       case "transfer":
       case "asset_buy":
       case "cc_payment":

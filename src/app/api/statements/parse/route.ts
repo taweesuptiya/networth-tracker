@@ -20,6 +20,10 @@ const SCHEMA = {
     account_holder: { type: "string" },
     account_number_masked: { type: "string" },
     currency: { type: "string" },
+    ending_balance: {
+      type: "number",
+      description: "Closing / ending balance shown on the statement. For savings accounts this is the balance after the last transaction. For credit cards this is the outstanding balance or amount due. Omit if not clearly stated.",
+    },
     transactions: {
       type: "array",
       items: {
@@ -161,6 +165,7 @@ export async function POST(request: Request) {
       currency: parsed.currency,
       account_holder: parsed.account_holder ?? null,
       account_number: parsed.account_number_masked ?? null,
+      ending_balance: parsed.ending_balance ?? null,
       transactions: parsed.transactions,
       usage: response.usage,
     });

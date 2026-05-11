@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { AssetForm, type AssetFormData } from "./asset-form";
 import { deleteAsset } from "@/app/actions/assets";
-import { rawValue, valueInBase, convertCurrency, formatMoney } from "@/lib/money";
+import { grossValueInBase, valueInBase, convertCurrency, formatMoney } from "@/lib/money";
 
 export type Asset = {
   id: string;
@@ -15,6 +15,7 @@ export type Asset = {
   price_per_unit: number | null;
   manual_value: number | null;
   cost_basis: number | null;
+  debt_balance: number | null;
   currency: string;
   notes: string | null;
 };
@@ -45,6 +46,7 @@ export function AssetTable({
       price_per_unit: a.price_per_unit?.toString() ?? "",
       manual_value: a.manual_value?.toString() ?? "",
       cost_basis: a.cost_basis?.toString() ?? "",
+      debt_balance: a.debt_balance?.toString() ?? "",
       currency: a.currency,
       notes: a.notes ?? "",
     });
@@ -92,12 +94,21 @@ export function AssetTable({
               </tr>
             ) : (
               assets.map((a) => {
-                const value = valueInBase(a, baseCurrency, usdToThb);
+                // Equity (net worth contribution)
+                const equityValue = valueInBase(a, baseCurrency, usdToThb);
+                // Gross market value (for gain calculation)
+                const marketValue = grossValueInBase(a, baseCurrency, usdToThb);
+                const debt = a.debt_balance != null
+                  ? convertCurrency(Number(a.debt_balance), a.currency, baseCurrency, usdToThb)
+                  : 0;
+                const hasDebt = debt > 0;
+
                 const cost =
                   a.cost_basis != null
                     ? convertCurrency(Number(a.cost_basis), a.currency, baseCurrency, usdToThb)
                     : null;
-                const gain = cost != null ? value - cost : null;
+                // Gain based on gross market value vs cost basis (shows asset appreciation)
+                const gain = cost != null ? marketValue - cost : null;
                 const gainPct = cost != null && cost !== 0 ? (gain! / cost) * 100 : null;
                 const gainColor =
                   gain == null ? "text-zinc-400" : gain >= 0 ? "text-green-600" : "text-red-500";
@@ -120,7 +131,12 @@ export function AssetTable({
                       {cost != null ? formatMoney(cost, baseCurrency) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-medium">
-                      {formatMoney(value, baseCurrency)}
+                      <div>{formatMoney(equityValue, baseCurrency)}</div>
+                      {hasDebt && (
+                        <div className="text-xs text-zinc-500 font-normal">
+                          {formatMoney(marketValue, baseCurrency)} − {formatMoney(debt, baseCurrency)} debt
+                        </div>
+                      )}
                     </td>
                     <td className={`px-4 py-3 text-right ${gainColor}`}>
                       {gain != null ? (
