@@ -261,6 +261,7 @@ export function TransactionsBrowser({
       await updateTransaction(id, {
         tx_type: patch.tx_type,
         category: patch.category,
+        account_id: patch.account_id,
       });
       router.refresh();
     });
@@ -760,7 +761,22 @@ export function TransactionsBrowser({
                       />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{t.occurred_at}</td>
-                    <td className="px-3 py-2 text-zinc-500">{accountName(t.account_id)}</td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={t.account_id ?? ""}
+                        onChange={(e) =>
+                          onRowEdit(t.id, { account_id: e.target.value || null })
+                        }
+                        className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-1 py-0.5 text-zinc-600 dark:text-zinc-400"
+                      >
+                        <option value="">— none —</option>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-3 py-2 max-w-md truncate" title={t.description}>
                       {t.description}
                     </td>

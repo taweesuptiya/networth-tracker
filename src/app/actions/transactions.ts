@@ -45,28 +45,20 @@ export async function checkForDuplicates(
   if (candidates.length === 0) return { flags: [], existingCount: 0 };
   const supabase = await createClient();
 
-  // Verify auth — if not authenticated Supabase returns 0 rows silently due to RLS.
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    console.error("[dupcheck] not authenticated — returning no dups");
-    return { flags: candidates.map(() => false), existingCount: -1 };
-  }
+  if (!user) return { flags: candidates.map(() => false), existingCount: -1 };
 
-  // Slice to "YYYY-MM-DD" so Postgres date comparison works regardless of what format
-  // Supabase or Claude returns (could include a time/timezone component).
   const dates = candidates.map((c) => String(c.occurred_at).slice(0, 10)).sort();
   const from = dates[0];
   const to = dates[dates.length - 1];
 
-  const { data: existing, error: fetchErr } = await supabase
+  const { data: existing } = await supabase
     .from("transactions")
     .select("occurred_at, amount, direction")
     .eq("workspace_id", workspaceId)
     .gte("occurred_at", from)
     .lte("occurred_at", to)
     .limit(10000);
-
-  if (fetchErr) console.error("[dupcheck] fetch error:", fetchErr.message);
 
   const existingCount = existing?.length ?? 0;
 
@@ -138,7 +130,6 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
 
     // Cross-workspace transfer → create paired transfer_in row
     if (t.tx_type === "transfer" && t.target_workspace_id) {
-      // Verify target workspace owned by user (RLS will also enforce, but explicit check is clearer)
       const { data: ws } = await supabase
         .from("workspaces")
         .select("id")
@@ -159,7 +150,7 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
           direction: "credit",
           category: t.category ?? null,
           tx_type: "transfer_in",
-          account_id: t.account_id ?? null, // preserve source account so Marriage can see "from KBANK"
+          account_id: t.account_id ?? null,
           linked_tx_id: sourceId,
         })
         .select("id")
@@ -168,7 +159,6 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
         errors.push(`Pair insert failed: ${pairErr?.message}`);
         continue;
       }
-      // Back-link source row to pair
       await supabase
         .from("transactions")
         .update({ linked_tx_id: pair.id })
@@ -239,7 +229,6 @@ export async function updateTransaction(
 ) {
   const supabase = await createClient();
 
-  // Fetch current row to detect side effects (paired + asset_buy)
   const { data: current } = await supabase
     .from("transactions")
     .select(
@@ -310,7 +299,6 @@ export async function deleteTransactions(ids: string[]) {
         .eq("id", r.target_asset_id)
         .maybeSingle();
       if (asset) {
-        // Restore principal to debt balance
         await supabase
           .from("assets")
           .update({ debt_balance: Number(asset.debt_balance ?? 0) + Number(r.units_delta) })
