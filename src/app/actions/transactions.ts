@@ -69,10 +69,6 @@ export async function checkForDuplicates(
   if (fetchErr) console.error("[dupcheck] fetch error:", fetchErr.message);
 
   const existingCount = existing?.length ?? 0;
-  console.log(
-    `[dupcheck] uid=${user.id.slice(0, 8)} ws=${workspaceId.slice(0, 8)} ` +
-    `range=${from}→${to} db_rows=${existingCount} candidates=${candidates.length}`
-  );
 
   const existingKeys = new Set(
     (existing ?? []).map((e) =>
@@ -84,16 +80,7 @@ export async function checkForDuplicates(
     )
   );
 
-  // Debug: log a few key samples so we can see if they match
-  if (existingCount > 0 && candidates.length > 0) {
-    const sampleExisting = Array.from(existingKeys).slice(0, 3).join(" | ");
-    const sampleCand = candidates.slice(0, 3).map((c) => dupKey(c)).join(" | ");
-    console.log(`[dupcheck] sample existing keys: ${sampleExisting}`);
-    console.log(`[dupcheck] sample candidate keys: ${sampleCand}`);
-  }
-
   const flags = candidates.map((c) => existingKeys.has(dupKey(c)));
-  console.log(`[dupcheck] detected ${flags.filter(Boolean).length} dups`);
   return { flags, existingCount };
 }
 
