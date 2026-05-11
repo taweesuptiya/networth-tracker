@@ -31,11 +31,7 @@ export type CommitTx = {
 };
 
 function dupKey(t: { occurred_at: string; amount: number; direction: string }) {
-  // Slice to 10 chars normalises both "YYYY-MM-DD" and "YYYY-MM-DDThh:mm:ss±hh:mm" from Supabase.
-  // Integer cents avoids floating-point drift when rebuilding the float for the key string.
-  const date = String(t.occurred_at).slice(0, 10);
-  const cents = Math.round(Number(t.amount) * 100);
-  return `${date}|${cents}|${t.direction}`;
+  return `${t.occurred_at}|${Math.round(Number(t.amount) * 100) / 100}|${t.direction}`;
 }
 
 export async function checkForDuplicates(
@@ -65,15 +61,6 @@ export async function checkForDuplicates(
     .gte("occurred_at", from)
     .lte("occurred_at", to)
     .limit(10000);
-
-  if (fetchErr) console.error("[dupcheck] fetch error:", fetchErr.message);
-
-  const existingCount = existing?.length ?? 0;
-  console.log(
-    `[dupcheck] uid=${user.id.slice(0, 8)} ws=${workspaceId.slice(0, 8)} ` +
-    `range=${from}→${to} db_rows=${existingCount} candidates=${candidates.length}`
-  );
-
   const existingKeys = new Set(
     (existing ?? []).map((e) =>
       dupKey({
@@ -245,6 +232,7 @@ export async function updateTransaction(
   patch: {
     tx_type?: string;
     category?: string | null;
+    account_id?: string | null;
     description?: string;
     amount?: number;
     occurred_at?: string;

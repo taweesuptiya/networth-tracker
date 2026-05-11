@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { commitTransactions, checkForDuplicates, type CommitTx } from "@/app/actions/transactions";
 import { createRule } from "@/app/actions/accounts";
-import { createAsset, updateLinkedAssetBalance } from "@/app/actions/assets";
+import { createAsset } from "@/app/actions/assets";
 import { classify, type Rule, type ClassifiedTx } from "@/lib/tx-rules";
 
 type ParsedTx = {
@@ -118,7 +118,11 @@ export function StatementUploader({
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
+  // Default to Personal workspace — sort before Marriage alphabetically so
+  // explicitly find it rather than relying on array order.
+  const [workspaceId, setWorkspaceId] = useState(
+    workspaces.find((w) => w.name.toLowerCase() === "personal")?.id ?? workspaces[0]?.id ?? ""
+  );
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [parsing, setParsing] = useState(false);
   const [committing, startCommit] = useTransition();
@@ -134,7 +138,6 @@ export function StatementUploader({
   const [skippedDup, setSkippedDup] = useState<number>(0);
   const [progress, setProgress] = useState<string>("");
   const [dupes, setDupes] = useState<boolean[]>([]);
-  const [dupDbCount, setDupDbCount] = useState<number>(0);
   const [localAssets, setLocalAssets] = useState<AssetRef[]>(assets);
   // Per-row inline new-asset form state
   const [newAssetRow, setNewAssetRow] = useState<number | null>(null);
@@ -553,8 +556,8 @@ export function StatementUploader({
               </div>
             </div>
           )}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto overflow-y-auto mb-3 max-h-[60vh]">
-            <table className="w-max min-w-full text-xs">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-3 max-h-[60vh] overflow-y-auto">
+            <table className="w-full text-xs">
               <thead className="bg-zinc-50 dark:bg-zinc-900 text-left text-zinc-500 sticky top-0 z-10">
                 <tr>
                   <th className="px-3 py-2 w-8">
@@ -655,30 +658,97 @@ export function StatementUploader({
                             ))}
                         </select>
                       )}
-                      {t.tx_type === "loan_repayment" && (
-                        <span className="ml-1 inline-flex gap-1 items-center">
-                          <select
-                            value={targetAsset[i] ?? ""}
-                            onChange={(e) => setTargetAsset({ ...targetAsset, [i]: e.target.value })}
-                            className="rounded border bg-transparent px-1 py-0.5 text-xs"
-                            title="Loan asset (e.g. Condo)"
-                          >
-                            <option value="">— pick loan asset —</option>
-                            {localAssets
-                              .filter((a) => ["House", "Other"].includes(a.type))
-                              .map((a) => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                              ))}
-                          </select>
-                          <input
-                            type="number"
-                            step="any"
-                            value={unitsDelta[i] ?? ""}
-                            onChange={(e) => setUnitsDelta({ ...unitsDelta, [i]: e.target.value })}
-                            placeholder="principal"
-                            title="Principal portion of this payment (interest = total − principal)"
-                            className="w-24 rounded border bg-transparent px-1 py-0.5 font-mono text-right text-xs"
-                          />
+                      {t.tx_type === "asset_buy" && (
+                        <span className="ml-1 flex flex-col gap-1">
+                          <span className="inline-flex gap-1 items-center">
+                            <select
+                              value={targetAsset[i] ?? ""}
+                              onChange={(e) => setTargetAsset({ ...targetAsset, [i]: e.target.value })}
+                              className="rounded border bg-transparent px-1 py-0.5 text-xs"
+                              title="Asset bought"
+                            >
+                              <option value="">— pick asset —</option>
+                              {localAssets
+                                .filter((a) => ["Stock", "Fund", "Crypto"].includes(a.type))
+                                .map((a) => (
+                                  <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                            </select>
+                            <input
+                              type="number"
+                              step="any"
+                              value={unitsDelta[i] ?? ""}
+                              onChange={(e) => setUnitsDelta({ ...unitsDelta, [i]: e.target.value })}
+                              placeholder="units"
+                              className="w-20 rounded border bg-transparent px-1 py-0.5 font-mono text-right text-xs"
+                            />
+                            <button
+                              className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                              onClick={() => { setNewAssetRow(newAssetRow === i ? null : i); setNewAssetName(""); setNewAssetSymbol(""); }}
+                            >
+                              {newAssetRow === i ? "✕ cancel" : "+ new"}
+                            </button>
+                          </span>
+                          {newAssetRow === i && (
+                            <span className="flex flex-wrap gap-1 items-center pl-1 border-l-2 border-blue-400">
+                              <input
+                                autoFocus
+                                placeholder="Asset name"
+                                value={newAssetName}
+                                onChange={(e) => setNewAssetName(e.target.value)}
+                                className="rounded border px-1 py-0.5 text-xs w-32 bg-transparent"
+                              />
+                              <select
+                                value={newAssetType}
+                                onChange={(e) => setNewAssetType(e.target.value as "Stock" | "Fund" | "Crypto")}
+                                className="rounded border px-1 py-0.5 text-xs bg-transparent"
+                              >
+                                <option>Stock</option>
+                                <option>Fund</option>
+                                <option>Crypto</option>
+                              </select>
+                              <input
+                                placeholder="Symbol (opt)"
+                                value={newAssetSymbol}
+                                onChange={(e) => setNewAssetSymbol(e.target.value)}
+                                className="rounded border px-1 py-0.5 text-xs w-24 bg-transparent font-mono uppercase"
+                              />
+                              <input
+                                placeholder="CCY"
+                                value={newAssetCurrency}
+                                onChange={(e) => setNewAssetCurrency(e.target.value.toUpperCase())}
+                                className="rounded border px-1 py-0.5 text-xs w-16 bg-transparent font-mono uppercase"
+                              />
+                              <button
+                                disabled={!newAssetName.trim() || creatingAsset}
+                                onClick={async () => {
+                                  setCreatingAsset(true);
+                                  const res = await createAsset({
+                                    workspace_id: workspaceId,
+                                    name: newAssetName.trim(),
+                                    type: newAssetType,
+                                    symbol: newAssetSymbol.trim() || null,
+                                    currency: newAssetCurrency.trim() || "USD",
+                                    price_source: "manual",
+                                  });
+                                  setCreatingAsset(false);
+                                  if (!res.error) {
+                                    // Reload assets list by re-fetching via router soft refresh
+                                    // and optimistically add to local list
+                                    const tempId = `new-${Date.now()}`;
+                                    const created: AssetRef = { id: tempId, name: newAssetName.trim(), type: newAssetType };
+                                    setLocalAssets((prev) => [...prev, created]);
+                                    setTargetAsset({ ...targetAsset, [i]: tempId });
+                                    setNewAssetRow(null);
+                                    router.refresh();
+                                  }
+                                }}
+                                className="px-2 py-0.5 text-xs rounded bg-zinc-900 text-white disabled:opacity-50"
+                              >
+                                {creatingAsset ? "…" : "Create"}
+                              </button>
+                            </span>
+                          )}
                         </span>
                       )}
                       {t.tx_type === "asset_buy" && (
