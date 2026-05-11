@@ -115,7 +115,11 @@ export function StatementUploader({
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
+  // Default to Personal workspace — sort before Marriage alphabetically so
+  // explicitly find it rather than relying on array order.
+  const [workspaceId, setWorkspaceId] = useState(
+    workspaces.find((w) => w.name.toLowerCase() === "personal")?.id ?? workspaces[0]?.id ?? ""
+  );
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [parsing, setParsing] = useState(false);
   const [committing, startCommit] = useTransition();
