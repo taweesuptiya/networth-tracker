@@ -9,7 +9,7 @@ import { RefreshButton } from "@/components/refresh-button";
 import { AppShell } from "@/components/app-shell";
 import { DashboardCharts } from "@/components/dashboard-charts";
 import type { SavedBudget } from "@/components/projection-table";
-import { valueInBase, convertCurrency, formatMoney } from "@/lib/money";
+import { valueInBase, grossValueInBase, convertCurrency, formatMoney } from "@/lib/money";
 import { loadProjectionConfig } from "@/app/actions/projection";
 import { project, projectMarriage, isMarriageConfig, type MonthRow } from "@/lib/projection";
 import { aggregateMonthly } from "@/lib/tx-rules";
@@ -61,7 +61,7 @@ export default async function Home({
 
   const { data: assetsData } = await supabase
     .from("assets")
-    .select("id, name, type, symbol, price_source, units, price_per_unit, manual_value, cost_basis, currency, notes")
+    .select("id, name, type, symbol, price_source, units, price_per_unit, manual_value, cost_basis, debt_balance, currency, notes")
     .eq("workspace_id", active.id)
     .order("type")
     .order("name");
@@ -78,7 +78,8 @@ export default async function Home({
     totalsByType.set(a.type, (totalsByType.get(a.type) ?? 0) + v);
     if (a.cost_basis != null) {
       totalCost += convertCurrency(Number(a.cost_basis), a.currency, baseCurrency, usdToThb);
-      costAssetsValue += v;
+      // Gain = gross market value − cost basis (appreciation, ignoring leverage)
+      costAssetsValue += grossValueInBase(a, baseCurrency, usdToThb);
     }
   }
   const allocation = Array.from(totalsByType.entries()).map(([type, value]) => ({
@@ -122,7 +123,7 @@ export default async function Home({
 
   const { data: txs } = await supabase
     .from("transactions")
-    .select("occurred_at, amount, direction, tx_type, category")
+    .select("occurred_at, amount, direction, tx_type, category, units_delta")
     .eq("workspace_id", active.id);
   const monthly = aggregateMonthly(
     (txs ?? []).map((t) => ({
@@ -131,6 +132,7 @@ export default async function Home({
       direction: t.direction as "credit" | "debit",
       tx_type: String(t.tx_type),
       category: t.category as string | null,
+      units_delta: t.units_delta != null ? Number(t.units_delta) : null,
     }))
   );
   const actuals = monthly.map((m) => ({

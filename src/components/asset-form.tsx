@@ -19,6 +19,7 @@ export type AssetFormData = {
   price_per_unit: string;
   manual_value: string;
   cost_basis: string;
+  debt_balance: string;
   currency: string;
   notes: string;
 };
@@ -32,6 +33,7 @@ const empty: AssetFormData = {
   price_per_unit: "",
   manual_value: "",
   cost_basis: "",
+  debt_balance: "",
   currency: "THB",
   notes: "",
 };
@@ -67,6 +69,7 @@ export function AssetForm({
       price_per_unit: data.price_per_unit === "" ? null : Number(data.price_per_unit),
       manual_value: data.manual_value === "" ? null : Number(data.manual_value),
       cost_basis: data.cost_basis === "" ? null : Number(data.cost_basis),
+      debt_balance: data.debt_balance === "" ? null : Number(data.debt_balance),
       currency: data.currency.trim() || "THB",
       notes: data.notes.trim() || null,
     };
@@ -189,6 +192,18 @@ export function AssetForm({
               step="any"
               value={data.cost_basis}
               onChange={(e) => update("cost_basis", e.target.value)}
+              className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1.5"
+            />
+          </label>
+
+          <label className="col-span-2 flex flex-col gap-1">
+            Outstanding debt / mortgage balance (in asset currency)
+            <input
+              type="number"
+              step="any"
+              value={data.debt_balance}
+              onChange={(e) => update("debt_balance", e.target.value)}
+              placeholder="0 — leave blank if no debt"
               className="rounded border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1.5"
             />
           </label>

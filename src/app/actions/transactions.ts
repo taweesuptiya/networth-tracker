@@ -12,7 +12,8 @@ export type TxType =
   | "cc_payment"
   | "cc_payment_received"
   | "reimbursement"
-  | "asset_buy";
+  | "asset_buy"
+  | "loan_repayment";
 
 export type CommitTx = {
   occurred_at: string;
@@ -205,12 +206,30 @@ export async function commitTransactions(workspaceId: string, txs: CommitTx[]) {
         else assetUpdates++;
       }
     }
+
+    // Loan repayment → reduce asset.debt_balance by units_delta (principal portion)
+    if (t.tx_type === "loan_repayment" && t.target_asset_id && t.units_delta != null) {
+      const { data: asset } = await supabase
+        .from("assets")
+        .select("debt_balance")
+        .eq("id", t.target_asset_id)
+        .maybeSingle();
+      if (asset) {
+        const newDebt = Math.max(0, Number(asset.debt_balance ?? 0) - Number(t.units_delta));
+        const { error: updErr } = await supabase
+          .from("assets")
+          .update({ debt_balance: newDebt, updated_at: new Date().toISOString() })
+          .eq("id", t.target_asset_id);
+        if (updErr) errors.push(`Debt update: ${updErr.message}`);
+        else assetUpdates++;
+      }
+    }
   }
 
+  revalidatePath("/");
   revalidatePath("/statements");
   revalidatePath("/transactions");
   revalidatePath("/projection");
-  revalidatePath("/");
 
   return {
     error: errors.length > 0 ? errors.join("; ") : null,
@@ -276,7 +295,7 @@ export async function deleteTransactions(ids: string[]) {
   if (ids.length === 0) return { error: null, count: 0 };
   const supabase = await createClient();
 
-  // Reverse asset buys + collect linked pair ids
+  // Reverse asset buys + loan repayments + collect linked pair ids
   const { data: rows } = await supabase
     .from("transactions")
     .select("id, tx_type, target_asset_id, units_delta, linked_tx_id")
@@ -297,6 +316,20 @@ export async function deleteTransactions(ids: string[]) {
           .eq("id", r.target_asset_id);
       }
     }
+    if (r.tx_type === "loan_repayment" && r.target_asset_id && r.units_delta != null) {
+      const { data: asset } = await supabase
+        .from("assets")
+        .select("debt_balance")
+        .eq("id", r.target_asset_id)
+        .maybeSingle();
+      if (asset) {
+        // Restore principal to debt balance
+        await supabase
+          .from("assets")
+          .update({ debt_balance: Number(asset.debt_balance ?? 0) + Number(r.units_delta) })
+          .eq("id", r.target_asset_id);
+      }
+    }
     if (r.linked_tx_id) allToDelete.add(r.linked_tx_id as string);
   }
 
@@ -307,9 +340,9 @@ export async function deleteTransactions(ids: string[]) {
     .select("id");
   if (error) return { error: error.message, count: 0 };
 
+  revalidatePath("/");
   revalidatePath("/transactions");
   revalidatePath("/projection");
-  revalidatePath("/");
   return { error: null, count: data?.length ?? allToDelete.size };
 }
 

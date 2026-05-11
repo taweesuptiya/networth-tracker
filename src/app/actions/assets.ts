@@ -13,6 +13,7 @@ export type AssetInput = {
   price_per_unit?: number | null;
   manual_value?: number | null;
   cost_basis?: number | null;
+  debt_balance?: number | null;
   currency: string;
   notes?: string | null;
 };

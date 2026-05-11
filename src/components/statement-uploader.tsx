@@ -42,6 +42,7 @@ const TX_TYPES = [
   "transfer",
   "transfer_in",
   "asset_buy",
+  "loan_repayment",
   "cc_payment",
   "cc_payment_received",
   "reimbursement",
@@ -305,9 +306,11 @@ export function StatementUploader({
           target_workspace_id:
             t.tx_type === "transfer" && targetWs[i] ? targetWs[i] : null,
           target_asset_id:
-            t.tx_type === "asset_buy" && targetAsset[i] ? targetAsset[i] : null,
+            (t.tx_type === "asset_buy" || t.tx_type === "loan_repayment") && targetAsset[i]
+              ? targetAsset[i]
+              : null,
           units_delta:
-            t.tx_type === "asset_buy" && unitsDelta[i]
+            (t.tx_type === "asset_buy" || t.tx_type === "loan_repayment") && unitsDelta[i]
               ? Number(unitsDelta[i])
               : null,
         };
@@ -651,6 +654,32 @@ export function StatementUploader({
                               </option>
                             ))}
                         </select>
+                      )}
+                      {t.tx_type === "loan_repayment" && (
+                        <span className="ml-1 inline-flex gap-1 items-center">
+                          <select
+                            value={targetAsset[i] ?? ""}
+                            onChange={(e) => setTargetAsset({ ...targetAsset, [i]: e.target.value })}
+                            className="rounded border bg-transparent px-1 py-0.5 text-xs"
+                            title="Loan asset (e.g. Condo)"
+                          >
+                            <option value="">— pick loan asset —</option>
+                            {localAssets
+                              .filter((a) => ["House", "Other"].includes(a.type))
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                          </select>
+                          <input
+                            type="number"
+                            step="any"
+                            value={unitsDelta[i] ?? ""}
+                            onChange={(e) => setUnitsDelta({ ...unitsDelta, [i]: e.target.value })}
+                            placeholder="principal"
+                            title="Principal portion of this payment (interest = total − principal)"
+                            className="w-24 rounded border bg-transparent px-1 py-0.5 font-mono text-right text-xs"
+                          />
+                        </span>
                       )}
                       {t.tx_type === "asset_buy" && (
                         <span className="ml-1 flex flex-col gap-1">
