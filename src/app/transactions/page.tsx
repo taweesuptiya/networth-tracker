@@ -24,7 +24,9 @@ export default async function TransactionsPage({
   if (!workspaces || workspaces.length === 0) redirect("/");
 
   const params = await searchParams;
-  const activeId = params.ws ?? workspaces[0].id;
+  const defaultId =
+    workspaces.find((w) => w.name.toLowerCase() === "personal")?.id ?? workspaces[0].id;
+  const activeId = params.ws ?? defaultId;
   const active = workspaces.find((w) => w.id === activeId) ?? workspaces[0];
 
   const { data: txData } = await supabase
