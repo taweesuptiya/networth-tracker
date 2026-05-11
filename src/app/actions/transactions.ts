@@ -191,6 +191,7 @@ export async function updateTransaction(
   patch: {
     tx_type?: string;
     category?: string | null;
+    account_id?: string | null;
     description?: string;
     amount?: number;
     occurred_at?: string;
