@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { StatementUploader } from "@/components/statement-uploader-dynamic";
+import { PayslipUploader } from "@/components/payslip-uploader-dynamic";
 import { PdfPasswordsManager } from "@/components/pdf-passwords-manager";
 import { AppShell } from "@/components/app-shell";
 import type { Rule } from "@/lib/tx-rules";
@@ -78,6 +79,19 @@ export default async function StatementsPage() {
             type: a.type as string,
           }))}
         />
+
+        <div className="mt-6">
+          <PayslipUploader
+            workspaces={workspaces ?? []}
+            savedPasswords={pdfPasswords ?? []}
+            accounts={accounts ?? []}
+            assets={(assets ?? []).map((a) => ({
+              id: a.id as string,
+              name: a.name as string,
+              type: a.type as string,
+            }))}
+          />
+        </div>
 
         <div className="mt-10">
           <h2 className="text-sm font-medium text-zinc-500 mb-3">Recent transactions</h2>
