@@ -19,6 +19,18 @@ export async function createAccount(input: {
   return { error: null };
 }
 
+export async function updateAccount(
+  id: string,
+  patch: { name?: string; type?: "savings" | "credit_card" | "cash"; last4?: string | null; notes?: string | null }
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("accounts").update(patch).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/accounts");
+  revalidatePath("/statements");
+  return { error: null };
+}
+
 export async function deleteAccount(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("accounts").delete().eq("id", id);

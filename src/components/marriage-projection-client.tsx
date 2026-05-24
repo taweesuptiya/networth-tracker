@@ -306,11 +306,13 @@ function MarriageProjectionTable({
   actuals,
   savedBudgets,
   workspaceId,
+  startingSavings,
 }: {
   rows: MarriageMonthRow[];
   actuals: ActualMonth[];
   savedBudgets: SavedBudgetMarriage[];
   workspaceId: string;
+  startingSavings: number;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [expandExpenses, setExpandExpenses] = useState(false);
@@ -319,6 +321,18 @@ function MarriageProjectionTable({
 
   const actualMap = new Map(actuals.map((a) => [a.month, a]));
   const budgetMap = new Map(savedBudgets.map((b) => [b.month, b]));
+
+  // Running actual savings balance: start from the configured starting balance
+  // and accumulate real income − expense each month (mirrors personal's actualSavingByMonth)
+  const actualSavingByMonth = new Map<string, number>();
+  let runningSaving = startingSavings;
+  for (const r of rows) {
+    const a = actualMap.get(r.month);
+    if (a) {
+      runningSaving += a.income - a.expense;
+      actualSavingByMonth.set(r.month, runningSaving);
+    }
+  }
 
   // Collect all expense category labels
   const allCategories = new Set<string>();
@@ -479,15 +493,35 @@ function MarriageProjectionTable({
               expanded={expandAssets}
               onToggle={() => setExpandAssets((v) => !v)}
             />
-            <Row label="Savings balance" values={visible.map((r) => r.saving_balance)} />
-            <Row label="Condo value" values={visible.map((r) => r.condo_value)} />
-            <Row label="Condo loan" values={visible.map((r) => r.condo_loan)} />
-            <Row label="Equity" values={visible.map((r) => r.equity)} />
+
+            {/* Savings */}
+            <Row label="Savings (forecast)" values={visible.map((r) => r.saving_balance)} />
+            <Row
+              label="↳ Savings (actual, from income−expense)"
+              values={visible.map((r) => actualSavingByMonth.get(r.month) ?? 0)}
+              muted
+            />
+
+            {/* Condo — kept as forecast only (no real-time data source) */}
+            <Row label="Condo value (forecast)" values={visible.map((r) => r.condo_value)} />
+            <Row label="Condo loan (forecast)" values={visible.map((r) => r.condo_loan)} />
+            <Row label="Equity (forecast)" values={visible.map((r) => r.equity)} />
+
+            {/* Total networth */}
             <Row
               label="TOTAL NETWORTH (forecast)"
               values={visible.map((r) => r.total_networth)}
               bold
               highlight
+            />
+            <Row
+              label="↳ Total networth (actual savings + forecast equity)"
+              values={visible.map((r) => {
+                const actualSaving = actualSavingByMonth.get(r.month);
+                if (actualSaving == null) return 0;
+                return actualSaving + r.equity;
+              })}
+              muted
             />
             <Row
               label="↳ Budget snapshot"
@@ -505,16 +539,13 @@ function MarriageProjectionTable({
                     Asset breakdown
                   </td>
                 </tr>
+                <Row label="  Savings (forecast)" values={visible.map((r) => r.saving_balance)} muted />
                 <Row
-                  label="  Savings"
-                  values={visible.map((r) => r.saving_balance)}
+                  label="  Savings (actual)"
+                  values={visible.map((r) => actualSavingByMonth.get(r.month) ?? 0)}
                   muted
                 />
-                <Row
-                  label="  Condo equity (value − loan)"
-                  values={visible.map((r) => r.equity)}
-                  muted
-                />
+                <Row label="  Condo equity (forecast)" values={visible.map((r) => r.equity)} muted />
               </>
             )}
           </tbody>
@@ -847,6 +878,7 @@ export function MarriageProjectionClient({
         actuals={actuals}
         savedBudgets={budgets}
         workspaceId={workspaceId}
+        startingSavings={cfg.starting.savings}
       />
     </>
   );
