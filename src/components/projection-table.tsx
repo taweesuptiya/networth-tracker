@@ -138,13 +138,38 @@ export function ProjectionTable({
               muted
             />
             <Row
-              label="↳ Actual"
-              values={visible.map((r) => actualMap.get(r.month)?.expense ?? 0)}
+              label="↳ Actual (gross spend)"
+              values={visible.map((r) => {
+                const a = actualMap.get(r.month);
+                if (!a) return 0;
+                const gross = Object.values(a.gross_expense_by_category ?? {}).reduce((s, v) => s + v, 0);
+                return gross > 0 ? gross : Math.max(0, a.expense);
+              })}
               muted
               linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { tx_type: "expense" })}
             />
             <Row
-              label="↳ Variance (Actual − Budget)"
+              label="↳ Reimbursements received"
+              values={visible.map((r) => {
+                const a = actualMap.get(r.month);
+                if (!a?.reimbursement_by_category) return 0;
+                return Object.values(a.reimbursement_by_category).reduce((s, v) => s + v, 0);
+              })}
+              muted
+              positiveIsGood
+              linkBuilder={(_v, i) => txLink(workspaceId, visible[i].month, { tx_type: "reimbursement" })}
+            />
+            <Row
+              label="↳ Net actual (gross − reimb)"
+              values={visible.map((r) => {
+                const a = actualMap.get(r.month);
+                if (!a) return 0;
+                return Math.max(0, a.expense);
+              })}
+              muted
+            />
+            <Row
+              label="↳ Variance (Net actual − Budget)"
               values={visible.map((r) => {
                 const b = budgetMap.get(r.month)?.expense_budget ?? 0;
                 const a = actualMap.get(r.month)?.expense ?? 0;

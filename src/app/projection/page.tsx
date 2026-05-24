@@ -60,13 +60,17 @@ export default async function ProjectionPage({
 
   const { data: assetsData } = await supabase
     .from("assets")
-    .select("units, price_per_unit, manual_value, currency")
+    .select("units, price_per_unit, manual_value, currency, type")
     .eq("workspace_id", active.id);
   const usdToThb = Number(active.usd_to_thb ?? 32.33);
   const startingNetworth = (assetsData ?? []).reduce(
     (s, a) => s + valueInBase(a, active.base_currency, usdToThb),
     0
   );
+  // Sum of savings-type assets — used as the "current" anchor for actual savings back-propagation
+  const actualSavingsBalance = (assetsData ?? [])
+    .filter((a) => (a as { type?: string }).type === "savings")
+    .reduce((s, a) => s + valueInBase(a, active.base_currency, usdToThb), 0);
 
   const headerStarting = (
     <div className="text-xs text-zinc-500">
@@ -175,6 +179,7 @@ export default async function ProjectionPage({
           actuals={actuals}
           savedBudgets={savedBudgets}
           startingNetworth={startingNetworth}
+          actualSavingsBalance={actualSavingsBalance > 0 ? actualSavingsBalance : undefined}
           assetMonthValues={Object.fromEntries(
             Array.from(assetMonthValues.entries()).map(([name, inner]) => [
               name,

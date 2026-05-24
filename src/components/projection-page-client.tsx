@@ -17,6 +17,7 @@ export function ProjectionPageClient({
   actuals,
   savedBudgets,
   startingNetworth,
+  actualSavingsBalance,
   assetMonthValues,
 }: {
   workspaceId: string;
@@ -31,6 +32,8 @@ export function ProjectionPageClient({
   }[];
   savedBudgets: SavedBudget[];
   startingNetworth: number;
+  /** Current sum of savings-type assets — used as anchor for actual-savings back-propagation */
+  actualSavingsBalance?: number;
   assetMonthValues: AssetMonthValues;
 }) {
   const [cfg, setCfg] = useState<ProjectionConfig>(initialConfig);
@@ -78,15 +81,42 @@ export function ProjectionPageClient({
   const actualsByMonth = new Map(actuals.map((a) => [a.month, a]));
   const actualNetworth: { month: string; total: number }[] = [];
   const actualSavingByMonth = new Map<string, number>();
+
+  // Collect sorted months that have actual data
+  const actualMonths = actuals.map((a) => a.month).sort();
+
+  if (actualSavingsBalance != null && actualSavingsBalance > 0 && actualMonths.length > 0) {
+    // Back-propagate from current savings asset balance (most accurate anchor).
+    // Today's balance is anchored to the latest actual month.
+    // Going backwards: balance_at_prev_month = balance_at_this_month - (income - expense) for this month.
+    let balance = actualSavingsBalance;
+    for (let i = actualMonths.length - 1; i >= 0; i--) {
+      const m = actualMonths[i];
+      actualSavingByMonth.set(m, balance);
+      if (i > 0) {
+        const a = actualsByMonth.get(m)!;
+        balance = balance - (a.income - a.expense);
+      }
+    }
+  } else {
+    // Fallback: forward-propagate from manually-configured starting savings
+    let runningSaving = initialConfig.starting.savings;
+    for (const r of rows) {
+      const a = actualsByMonth.get(r.month);
+      if (a) {
+        runningSaving += a.income - a.expense;
+        actualSavingByMonth.set(r.month, runningSaving);
+      }
+    }
+  }
+
+  // Running actual networth (always forward-propagated from startingNetworth)
   let runningActual = startingNetworth;
-  let runningSaving = initialConfig.starting.savings;
   for (const r of rows) {
     const a = actualsByMonth.get(r.month);
     if (a) {
       runningActual += a.income - a.expense;
       actualNetworth.push({ month: r.month, total: runningActual });
-      runningSaving += a.income - a.expense;
-      actualSavingByMonth.set(r.month, runningSaving);
     }
   }
 
