@@ -82,7 +82,7 @@ export function AssetForm({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+      <div className="bg-card rounded-2xl border w-full max-w-md p-6" style={{background: 'var(--card)'}}>
         <h2 className="text-lg font-semibold mb-4">
           {data.id ? "Edit asset" : "Add asset"}
         </h2>
@@ -93,7 +93,7 @@ export function AssetForm({
               required
               value={data.name}
               onChange={(e) => update("name", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
@@ -102,7 +102,7 @@ export function AssetForm({
             <select
               value={data.type}
               onChange={(e) => update("type", e.target.value as AssetType)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             >
               {TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -117,7 +117,7 @@ export function AssetForm({
             <select
               value={data.currency}
               onChange={(e) => update("currency", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             >
               <option value="THB">THB</option>
               <option value="USD">USD</option>
@@ -130,7 +130,7 @@ export function AssetForm({
               value={data.symbol}
               onChange={(e) => update("symbol", e.target.value)}
               placeholder="GRAB, K-FIRMF"
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
@@ -139,7 +139,7 @@ export function AssetForm({
             <select
               value={data.price_source}
               onChange={(e) => update("price_source", e.target.value as PriceSource)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             >
               {SOURCES.map((s) => (
                 <option key={s} value={s}>
@@ -156,7 +156,7 @@ export function AssetForm({
               step="any"
               value={data.units}
               onChange={(e) => update("units", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
@@ -167,7 +167,7 @@ export function AssetForm({
               step="any"
               value={data.price_per_unit}
               onChange={(e) => update("price_per_unit", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
@@ -178,7 +178,7 @@ export function AssetForm({
               step="any"
               value={data.manual_value}
               onChange={(e) => update("manual_value", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
@@ -189,7 +189,7 @@ export function AssetForm({
               step="any"
               value={data.cost_basis}
               onChange={(e) => update("cost_basis", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
@@ -198,7 +198,7 @@ export function AssetForm({
             <input
               value={data.notes}
               onChange={(e) => update("notes", e.target.value)}
-              className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5"
+              className="rounded border px-2 py-1.5" style={{background: 'var(--paper-darker)'}}
             />
           </label>
 
