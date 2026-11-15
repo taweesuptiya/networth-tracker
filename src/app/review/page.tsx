@@ -154,6 +154,30 @@ export default async function ReviewPage({
   for (const m of budgetMap.keys()) allMonths.add(m);
   const months = Array.from(allMonths).sort().reverse();
 
+  // Savings rate summary — last 12 months with income data
+  const savingsRateByMonth = new Map<string, number>();
+  for (const a of monthly) {
+    if (a.income > 0) {
+      savingsRateByMonth.set(a.month, (a.income - a.expense) / a.income);
+    }
+  }
+  const last12WithRate = months
+    .slice(0, 12)
+    .filter((m) => savingsRateByMonth.has(m))
+    .map((m) => ({ month: m, rate: savingsRateByMonth.get(m)! }));
+  const avgSavingsRate =
+    last12WithRate.length > 0
+      ? last12WithRate.reduce((s, r) => s + r.rate, 0) / last12WithRate.length
+      : null;
+  const bestEntry = last12WithRate.reduce<{ month: string; rate: number } | null>(
+    (best, r) => (best === null || r.rate > best.rate ? r : best),
+    null
+  );
+  const worstEntry = last12WithRate.reduce<{ month: string; rate: number } | null>(
+    (worst, r) => (worst === null || r.rate < worst.rate ? r : worst),
+    null
+  );
+
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   // Fallback for actual NW per month when no snapshot exists:
@@ -219,6 +243,58 @@ export default async function ReviewPage({
       </header>
 
       <main className="flex-1 px-4 py-4 md:px-10 md:py-10 max-w-6xl w-full mx-auto stagger">
+        {avgSavingsRate !== null && (
+          <div className="border border-paper-border rounded-lg p-5 mb-10 grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-1">
+                12-mo avg savings rate
+              </p>
+              <p
+                className={
+                  "metric text-2xl " +
+                  (avgSavingsRate >= 0.2
+                    ? "text-jade-bright"
+                    : avgSavingsRate >= 0
+                      ? "text-ink"
+                      : "text-oxblood-bright")
+                }
+              >
+                {(avgSavingsRate * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-1">
+                Best month
+              </p>
+              <p className="metric text-2xl text-jade-bright">
+                {bestEntry ? `${(bestEntry.rate * 100).toFixed(1)}%` : "—"}
+              </p>
+              {bestEntry && (
+                <p className="text-xs text-ink-faint mt-0.5">{monthLabel(bestEntry.month)}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-1">
+                Worst month
+              </p>
+              <p className="metric text-2xl text-oxblood-bright">
+                {worstEntry ? `${(worstEntry.rate * 100).toFixed(1)}%` : "—"}
+              </p>
+              {worstEntry && (
+                <p className="text-xs text-ink-faint mt-0.5">
+                  {monthLabel(worstEntry.month)}
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-1">
+                Months tracked
+              </p>
+              <p className="metric text-2xl">{last12WithRate.length}</p>
+            </div>
+          </div>
+        )}
+
         {months.length === 0 ? (
           <p className="text-ink-subtle">
             No transactions or budget yet. Upload a statement to start.
@@ -291,10 +367,27 @@ export default async function ReviewPage({
                   <p className="text-xs text-ink-subtle mt-1 font-mono">
                     Net cash · {baseCurrency}
                   </p>
+                  {actualIncome > 0 && (
+                    <p className="text-xs mt-3 font-mono text-ink-subtle">
+                      Saved{" "}
+                      <span
+                        className={
+                          actualNet / actualIncome >= 0.2
+                            ? "text-jade-bright"
+                            : actualNet >= 0
+                              ? "text-ink"
+                              : "text-oxblood-bright"
+                        }
+                      >
+                        {((actualNet / actualIncome) * 100).toFixed(1)}%
+                      </span>
+                      {" "}of income
+                    </p>
+                  )}
                   {nwChange != null && (
                     <p
                       className={
-                        "text-xs mt-3 font-mono " +
+                        "text-xs mt-2 font-mono " +
                         (nwChange >= 0 ? "text-jade-bright" : "text-oxblood-bright")
                       }
                     >

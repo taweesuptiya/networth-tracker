@@ -216,6 +216,47 @@ export default async function Home({
     }
   }
 
+  // RMF/SSF/PVD tax deduction tracker (personal workspace only)
+  type TaxTracker = {
+    annualSalary: number;
+    deductionCap: number;
+    ytdRmfSsf: number;
+    ytdPvd: number;
+    ytdTotal: number;
+    remaining: number;
+    monthsLeft: number;
+    suggestedMonthly: number;
+    pct: number;
+  };
+  let taxTracker: TaxTracker | null = null;
+  if (!isMarriageConfig(config)) {
+    const pc = config;
+    const annualSalary = (pc.income?.salary_monthly ?? 0) * 12;
+    if (annualSalary > 0) {
+      const monthsElapsed = new Date().getMonth() + 1; // 1–12
+      const ytdRmfSsf = (pc.deductions?.rmf_esg_monthly ?? 0) * monthsElapsed;
+      const ytdPvd =
+        (pc.income?.salary_monthly ?? 0) *
+        ((pc.deductions?.provident_pct ?? 0) / 100) *
+        monthsElapsed;
+      const ytdTotal = ytdRmfSsf + ytdPvd;
+      const deductionCap = Math.min(annualSalary * 0.3, 500_000);
+      const remaining = Math.max(0, deductionCap - ytdTotal);
+      const monthsLeft = 12 - monthsElapsed;
+      taxTracker = {
+        annualSalary,
+        deductionCap,
+        ytdRmfSsf,
+        ytdPvd,
+        ytdTotal,
+        remaining,
+        monthsLeft,
+        suggestedMonthly: monthsLeft > 0 ? remaining / monthsLeft : 0,
+        pct: Math.min(100, deductionCap > 0 ? (ytdTotal / deductionCap) * 100 : 0),
+      };
+    }
+  }
+
   // Current month metrics
   const currentMonth = new Date().toISOString().slice(0, 7);
   const thisMonth = actuals.find((a) => a.month === currentMonth);
@@ -352,6 +393,87 @@ export default async function Home({
             <AllocationChart data={allocation} baseCurrency={baseCurrency} />
           </div>
         </section>
+
+        {/* TAX DEDUCTION TRACKER */}
+        {taxTracker && (
+          <section className="mb-6">
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="display italic text-xl leading-none">Tax Deductions</h2>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+                RMF · SSF · PVD · {new Date().getFullYear()}
+              </span>
+            </div>
+            <div className="card-surface rounded-2xl p-5">
+              {/* Progress bar */}
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-xs text-ink-subtle font-mono">YTD invested</span>
+                <span className="text-xs font-mono">
+                  <span className={taxTracker.pct >= 80 ? "text-jade-bright" : ""}>
+                    {fmt(taxTracker.ytdTotal)}
+                  </span>
+                  <span className="text-ink-faint">
+                    {" "}/ {fmt(taxTracker.deductionCap)} {baseCurrency}
+                  </span>
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-paper-darker mb-5 overflow-hidden">
+                <div
+                  className={
+                    "h-full rounded-full transition-all " +
+                    (taxTracker.pct >= 100 ? "bg-jade-bright" : "bg-oxblood")
+                  }
+                  style={{ width: `${taxTracker.pct}%` }}
+                />
+              </div>
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">
+                    Est. annual salary
+                  </p>
+                  <p className="font-mono">{fmt(taxTracker.annualSalary)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">
+                    Deduction cap (30% · 500K)
+                  </p>
+                  <p className="font-mono">{fmt(taxTracker.deductionCap)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">
+                    YTD RMF/SSF
+                  </p>
+                  <p className="font-mono text-jade-bright">+{fmt(taxTracker.ytdRmfSsf)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">
+                    YTD PVD (employee)
+                  </p>
+                  <p className="font-mono text-jade-bright">+{fmt(taxTracker.ytdPvd)}</p>
+                </div>
+              </div>
+              {/* Recommendation */}
+              {taxTracker.remaining > 0 && taxTracker.monthsLeft > 0 ? (
+                <p className="text-xs text-ink-subtle border-t border-paper-border pt-3">
+                  Remaining:{" "}
+                  <span className="font-mono font-medium text-ink">
+                    {fmt(taxTracker.remaining)} {baseCurrency}
+                  </span>
+                  {" "}— invest{" "}
+                  <span className="font-mono font-medium text-oxblood-bright">
+                    {fmt(taxTracker.suggestedMonthly)}/mo
+                  </span>
+                  {" "}over the next {taxTracker.monthsLeft} month
+                  {taxTracker.monthsLeft !== 1 ? "s" : ""} to max out your deduction.
+                </p>
+              ) : taxTracker.remaining <= 0 ? (
+                <p className="text-xs text-jade-bright border-t border-paper-border pt-3 font-medium">
+                  Deduction cap reached — no more room this year.
+                </p>
+              ) : null}
+            </div>
+          </section>
+        )}
 
         {/* HOLDINGS */}
         <section>

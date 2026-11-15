@@ -57,10 +57,13 @@ export async function GET(request: Request) {
   const { data: workspaces } = await admin
     .from("workspaces")
     .select("id, base_currency, usd_to_thb");
+
+  const currentMonthStart = new Date().toISOString().slice(0, 7) + "-01";
+
   for (const w of workspaces ?? []) {
     const { data: rows } = await admin
       .from("assets")
-      .select("units, price_per_unit, manual_value, currency")
+      .select("id, units, price_per_unit, manual_value, currency, price_source")
       .eq("workspace_id", w.id);
     const total = (rows ?? []).reduce((s, a) => {
       const raw = a.manual_value != null
@@ -80,6 +83,33 @@ export async function GET(request: Request) {
       total_value: total,
       currency: w.base_currency,
     });
+
+    // Auto monthly asset snapshot — upsert today's prices into the current month row.
+    // Running every day ensures the end-of-month row always has the latest prices.
+    const snapRecords = (rows ?? [])
+      .map((a) => {
+        const value =
+          a.manual_value != null
+            ? Number(a.manual_value)
+            : Number(a.units ?? 0) * Number(a.price_per_unit ?? 0);
+        return {
+          workspace_id: w.id,
+          asset_id: a.id,
+          month: currentMonthStart,
+          price: a.price_per_unit ?? null,
+          units: a.units ?? null,
+          value,
+          currency: a.currency,
+          source: a.price_source as string,
+        };
+      })
+      .filter((r) => r.value > 0);
+
+    if (snapRecords.length > 0) {
+      await admin
+        .from("monthly_asset_snapshots")
+        .upsert(snapRecords, { onConflict: "workspace_id,asset_id,month" });
+    }
   }
 
   return NextResponse.json({ ok, fail, fx });
