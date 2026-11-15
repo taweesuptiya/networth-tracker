@@ -154,6 +154,26 @@ export default async function ReviewPage({
   for (const m of budgetMap.keys()) allMonths.add(m);
   const months = Array.from(allMonths).sort().reverse();
 
+  // Spending pattern alerts — flag months with expense > 1.25× rolling 3-month average
+  const spendingAlerts = new Map<string, boolean>();
+  {
+    const monthsAscForAlert = [...months].sort();
+    for (let i = 0; i < monthsAscForAlert.length; i++) {
+      const m = monthsAscForAlert[i];
+      const actual = monthly.find((x) => x.month === m);
+      if (!actual || actual.expense === 0) continue;
+      const prevSlice = monthsAscForAlert
+        .slice(Math.max(0, i - 3), i)
+        .map((pm) => monthly.find((x) => x.month === pm)?.expense ?? 0)
+        .filter((e) => e > 0);
+      if (prevSlice.length < 2) continue;
+      const avg = prevSlice.reduce((s, e) => s + e, 0) / prevSlice.length;
+      if (avg > 0 && actual.expense > avg * 1.25) {
+        spendingAlerts.set(m, true);
+      }
+    }
+  }
+
   // Savings rate summary — last 12 months with income data
   const savingsRateByMonth = new Map<string, number>();
   for (const a of monthly) {
@@ -357,9 +377,19 @@ export default async function ReviewPage({
               >
                 {/* Month label + headline */}
                 <div className="md:col-span-3">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-2">
-                    {monthLabel(m)}
-                  </p>
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+                      {monthLabel(m)}
+                    </p>
+                    {spendingAlerts.get(m) && (
+                      <span
+                        className="text-[9px] uppercase tracking-wider text-oxblood border border-oxblood/50 rounded px-1 py-0.5"
+                        title="Spending was more than 25% above the previous 3-month average"
+                      >
+                        ↑ high spend
+                      </span>
+                    )}
+                  </div>
                   <p className="metric text-4xl">
                     {actualNet >= 0 ? "+" : "−"}
                     {fmt(Math.abs(actualNet))}

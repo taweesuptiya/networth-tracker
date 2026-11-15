@@ -181,6 +181,65 @@ export function TransactionsBrowser({
   const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
+  // Recurring detection: group by normalised description, flag groups appearing in 2+ months
+  const recurring = useMemo(() => {
+    type Group = {
+      key: string;
+      description: string;
+      months: Set<string>;
+      totalAmount: number;
+      count: number;
+      txType: string;
+      category: string | null;
+      direction: "credit" | "debit";
+    };
+    const groups = new Map<string, Group>();
+    for (const t of txs) {
+      if (
+        t.tx_type === "transfer" ||
+        t.tx_type === "cc_payment" ||
+        t.tx_type === "cc_payment_received"
+      )
+        continue;
+      const key = t.description
+        .toLowerCase()
+        .replace(/[0-9]+/g, " ")
+        .replace(/[^\w\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!key) continue;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          description: t.description,
+          months: new Set(),
+          totalAmount: 0,
+          count: 0,
+          txType: t.tx_type,
+          category: t.category,
+          direction: t.direction,
+        });
+      }
+      const g = groups.get(key)!;
+      g.months.add(t.occurred_at.slice(0, 7));
+      g.totalAmount += t.amount;
+      g.count++;
+    }
+    return Array.from(groups.values())
+      .filter((g) => g.months.size >= 2)
+      .map((g) => ({
+        key: g.key,
+        description: g.description,
+        monthCount: g.months.size,
+        avgAmount: g.totalAmount / g.count,
+        txType: g.txType,
+        category: g.category,
+        direction: g.direction,
+      }))
+      .sort((a, b) => b.monthCount - a.monthCount || b.avgAmount - a.avgAmount)
+      .slice(0, 25);
+  }, [txs]);
+
   const allCategories = useMemo(
     () =>
       Array.from(
@@ -423,6 +482,63 @@ export function TransactionsBrowser({
           <span className="text-zinc-500">{autofillProgress}</span>
         )}
       </div>
+
+      {/* Recurring transactions panel */}
+      {recurring.length > 0 && (
+        <details className="mb-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+          <summary className="p-3 text-xs font-medium cursor-pointer flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 select-none hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            ↺ {recurring.length} recurring transaction{recurring.length !== 1 ? "s" : ""} detected
+            <span className="text-ink-faint font-normal">(click to expand)</span>
+          </summary>
+          <div className="p-4">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] text-ink-faint uppercase tracking-wider border-b pb-1">
+                  <th className="text-left pb-1.5">Description</th>
+                  <th className="text-center pb-1.5 px-3">Months</th>
+                  <th className="text-right pb-1.5">Avg amount</th>
+                  <th className="text-left pb-1.5 pl-4">Type · Category</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recurring.map((r) => (
+                  <tr
+                    key={r.key}
+                    className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 cursor-pointer"
+                    onClick={() => {
+                      setSearch(r.description);
+                      setPage(0);
+                    }}
+                    title="Click to filter by this description"
+                  >
+                    <td className="py-1.5 pr-2 max-w-xs truncate">{r.description}</td>
+                    <td className="text-center py-1.5 px-3">
+                      <span className="bg-zinc-200 dark:bg-zinc-700 rounded-full px-1.5 py-0.5 text-[10px]">
+                        {r.monthCount}×
+                      </span>
+                    </td>
+                    <td
+                      className={
+                        "text-right py-1.5 font-mono " +
+                        (r.direction === "credit" ? "text-jade-bright" : "")
+                      }
+                    >
+                      {fmt(r.avgAmount)}
+                    </td>
+                    <td className="pl-4 py-1.5 text-ink-subtle truncate">
+                      {r.txType !== "auto" ? r.txType : "—"}
+                      {r.category ? ` · ${r.category}` : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[10px] text-ink-faint mt-2">
+              Click a row to filter the transaction list by that description.
+            </p>
+          </div>
+        </details>
+      )}
 
       {/* Filters */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
