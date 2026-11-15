@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -65,12 +66,14 @@ export default async function TransactionsPage({
         </span>
       </header>
       <main className="flex-1 px-6 py-8 max-w-6xl w-full mx-auto">
-        <TransactionsBrowser
-          txs={txs}
-          accounts={accounts}
-          categoriesByType={categoriesByType}
-          workspaceId={active.id}
-        />
+        <Suspense fallback={<div className="text-sm text-zinc-500">Loading transactions…</div>}>
+          <TransactionsBrowser
+            txs={txs}
+            accounts={accounts}
+            categoriesByType={categoriesByType}
+            workspaceId={active.id}
+          />
+        </Suspense>
       </main>
     </AppShell>
   );

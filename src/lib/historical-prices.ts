@@ -1,4 +1,5 @@
 // Historical price fetchers — month-end values for backfill.
+import { FINNOMENA_HEADERS } from "./finnomena-headers";
 
 import YahooFinance from "yahoo-finance2";
 
@@ -78,7 +79,7 @@ export async function fetchFinnomenaMonthly(
   )}/nav/q?range=${range}`;
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": "Mozilla/5.0 networth-tracker" },
+      headers: FINNOMENA_HEADERS,
       cache: "no-store",
     });
     if (!res.ok) return [];

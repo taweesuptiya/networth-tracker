@@ -70,12 +70,6 @@ export function BackfillButton({ workspaceId }: { workspaceId: string }) {
           </ul>
         </div>
       )}
-      {result && errors.length === 0 && (
-        <div className="basis-full mt-2 text-[10px] text-ink-faint">
-          (Errors panel not appearing? Open DevTools console — full response is logged
-          there. Or Vercel may not have redeployed yet — hard reload Ctrl+Shift+R.)
-        </div>
-      )}
     </div>
   );
 }

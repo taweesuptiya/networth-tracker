@@ -123,12 +123,19 @@ export default async function ReviewPage({
   // Per-asset monthly snapshots — sum to get a precise per-month investment total
   const { data: massRows } = await supabase
     .from("monthly_asset_snapshots")
-    .select("month, value")
+    .select("month, value, currency")
     .eq("workspace_id", active.id);
   const investmentByMonth = new Map<string, number>();
   for (const r of massRows ?? []) {
     const m = String(r.month).slice(0, 7);
-    investmentByMonth.set(m, (investmentByMonth.get(m) ?? 0) + Number(r.value));
+    const raw = Number(r.value);
+    const converted =
+      r.currency === "USD" && baseCurrency === "THB"
+        ? raw * usdToThb
+        : r.currency === "THB" && baseCurrency === "USD"
+          ? raw / usdToThb
+          : raw;
+    investmentByMonth.set(m, (investmentByMonth.get(m) ?? 0) + converted);
   }
 
   // Current assets — for "today" baseline reference
