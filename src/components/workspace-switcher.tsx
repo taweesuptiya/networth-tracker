@@ -1,6 +1,4 @@
-"use client";
-
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import Link from "next/link";
 
 type Workspace = { id: string; name: string };
 
@@ -11,22 +9,14 @@ export function WorkspaceSwitcher({
   workspaces: Workspace[];
   activeId: string;
 }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const pathname = usePathname();
-
   return (
     <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5">
       {workspaces.map((w) => {
         const isActive = w.id === activeId;
         return (
-          <button
+          <Link
             key={w.id}
-            onClick={() => {
-              const next = new URLSearchParams(params);
-              next.set("ws", w.id);
-              router.push(`${pathname}?${next.toString()}`);
-            }}
+            href={`?ws=${w.id}`}
             className={
               "px-3 py-1 text-xs rounded-md transition-colors " +
               (isActive
@@ -35,7 +25,7 @@ export function WorkspaceSwitcher({
             }
           >
             {w.name}
-          </button>
+          </Link>
         );
       })}
     </div>
