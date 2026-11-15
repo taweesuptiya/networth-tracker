@@ -257,6 +257,27 @@ export default async function Home({
     }
   }
 
+  // Net worth milestones — find upcoming round-number targets from the forecast
+  const nwSteps =
+    baseCurrency === "USD"
+      ? [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 5_000_000]
+      : [1_000_000, 3_000_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000, 30_000_000];
+  const milestoneReachMonth = new Map<number, string>();
+  let prevNw = 0;
+  for (const r of rows) {
+    for (const tgt of nwSteps) {
+      if (!milestoneReachMonth.has(tgt) && r.total_networth >= tgt && prevNw < tgt) {
+        milestoneReachMonth.set(tgt, r.month);
+      }
+    }
+    prevNw = r.total_networth;
+  }
+  const upcomingMilestones = nwSteps
+    .filter((tgt) => tgt > total)
+    .map((tgt) => ({ amount: tgt, month: milestoneReachMonth.get(tgt) ?? null }))
+    .filter((m) => m.month !== null)
+    .slice(0, 4) as { amount: number; month: string }[];
+
   // Current month metrics
   const currentMonth = new Date().toISOString().slice(0, 7);
   const thisMonth = actuals.find((a) => a.month === currentMonth);
@@ -471,6 +492,57 @@ export default async function Home({
                   Deduction cap reached — no more room this year.
                 </p>
               ) : null}
+            </div>
+          </section>
+        )}
+
+        {/* NET WORTH MILESTONES */}
+        {upcomingMilestones.length > 0 && (
+          <section className="mb-6">
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="display italic text-xl leading-none">Milestones</h2>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+                based on projection
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {upcomingMilestones.map(({ amount, month }) => {
+                const [y, mo] = month.split("-").map(Number);
+                const monthsAway =
+                  (y - new Date().getFullYear()) * 12 +
+                  (mo - (new Date().getMonth() + 1));
+                const pct = Math.min(100, (total / amount) * 100);
+                const label = new Date(month + "-01").toLocaleDateString("en-GB", {
+                  month: "short",
+                  year: "numeric",
+                });
+                return (
+                  <div key={amount} className="card-surface rounded-2xl p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">
+                      {baseCurrency === "USD"
+                        ? amount >= 1_000_000
+                          ? `$${(amount / 1_000_000).toFixed(1)}M`
+                          : `$${(amount / 1_000).toFixed(0)}K`
+                        : amount >= 1_000_000
+                          ? `฿${(amount / 1_000_000).toFixed(0)}M`
+                          : `฿${(amount / 1_000).toFixed(0)}K`}
+                    </p>
+                    <p className="metric text-2xl">{label}</p>
+                    <p className="text-xs text-ink-faint mt-0.5 font-mono">
+                      {monthsAway} mo away
+                    </p>
+                    <div className="h-1 rounded-full bg-paper-darker mt-3 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-oxblood"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-ink-faint mt-1 font-mono">
+                      {pct.toFixed(0)}% there
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}

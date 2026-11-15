@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { TransactionsBrowser, type Tx, type AccountRef } from "@/components/transactions-browser";
+import { QuickAddButton } from "@/components/quick-add-button";
 import { loadProjectionConfig } from "@/app/actions/projection";
 import { categoriesByTxType } from "@/lib/projection";
 
@@ -20,7 +21,7 @@ export default async function TransactionsPage({
 
   const { data: workspaces } = await supabase
     .from("workspaces")
-    .select("id, name")
+    .select("id, name, base_currency")
     .order("name");
   if (!workspaces || workspaces.length === 0) redirect("/");
 
@@ -61,9 +62,10 @@ export default async function TransactionsPage({
           <h1 className="text-lg font-semibold">Transactions</h1>
           <WorkspaceSwitcher workspaces={workspaces} activeId={active.id} />
         </div>
-        <span className="text-xs text-zinc-500">
-          {txs.length} total
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-zinc-500">{txs.length} total</span>
+          <QuickAddButton workspaceId={active.id} currency={active.base_currency ?? "THB"} />
+        </div>
       </header>
       <main className="flex-1 px-6 py-8 max-w-6xl w-full mx-auto">
         <Suspense fallback={<div className="text-sm text-zinc-500">Loading transactions…</div>}>
